@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "type_traits": "c",
+        "fcntl.h": "c",
+        "errno.h": "c",
+        "attestation.h": "c",
+        "ptrace.h": "c"
+    }
+}
