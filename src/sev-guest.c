@@ -7,9 +7,9 @@
  *
  * Mount the file system with:
  *
- *     sev-guest -f --name=mydevice
+ *     sev-guest -f --name=sev-guest
  *
- * You should now have a new /dev/mydevice character device. To "unmount" it,
+ * You should now have a new /dev/sev-guest character device. To "unmount" it,
  * kill the "cuse" process.
  *
  * To compile this example, run
@@ -55,15 +55,6 @@ static const char *usage =
 static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi)
 {
 	fuse_reply_open(req, fi);
-}
-
-void printReportData(const uint8_t report_data[64])
-{
-	for (int i = 0; i < 64; i++)
-	{
-		printf("%02X ", report_data[i]);
-	}
-	printf("\n");
 }
 
 void get_report(struct attestation_report *report)
@@ -154,7 +145,6 @@ void get_report(struct attestation_report *report)
     memcpy(report->signature.s, &signature_s, sizeof(signature_s));
     memset(&report->signature.reserved, 0x00, sizeof(report->signature.reserved));
 }
-
 
 static void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg, struct fuse_file_info *fi, unsigned flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
