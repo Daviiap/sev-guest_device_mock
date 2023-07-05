@@ -4,6 +4,10 @@
         "fcntl.h": "c",
         "errno.h": "c",
         "attestation.h": "c",
-        "ptrace.h": "c"
+        "ptrace.h": "c",
+        "fuse_opt.h": "c",
+        "sha.h": "c",
+        "obj_mac.h": "c",
+        "types.h": "c"
     }
 }
