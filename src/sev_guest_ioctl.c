@@ -10,17 +10,98 @@
 #include <sys/wait.h>
 #include <openssl/ecdsa.h>
 #include <openssl/obj_mac.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/bn.h>
 #include <openssl/sha.h>
 #include "snp/attestation.h"
 #include "snp/sev-guest.h"
 
-void sign_attestation_report(struct attestation_report* report, EC_KEY* private_key) {
-	int REPORT_LENGTH = sizeof(struct attestation_report);
-	int SIGNATURE_SIZE = sizeof(struct signature);
-	
-	unsigned char report_data[REPORT_LENGTH-SIGNATURE_SIZE];
+EC_KEY* read_ecdsa_key_from_file(const char* key_file) {
+    FILE* key_fp = fopen(key_file, "r");
+    if (key_fp == NULL) {
+        fprintf(stderr, "Error opening key file\n");
+        return NULL;
+    }
 
-	memcpy(report_data, report, sizeof(report_data));
+    EC_KEY* eckey = PEM_read_ECPrivateKey(key_fp, NULL, NULL, NULL);
+    fclose(key_fp);
+
+    if (eckey == NULL) {
+        fprintf(stderr, "Error reading ECDSA key from file\n");
+        return NULL;
+    }
+
+    return eckey;
+}
+
+void sign_attestation_report(struct attestation_report* report) {
+    // Convert attestation report (without the signature) to a byte array
+    unsigned char* data = (unsigned char*)report;
+    size_t data_len = offsetof(struct attestation_report, signature);
+
+    // Create an EC_KEY object for ECDSA
+    EC_KEY* eckey = read_ecdsa_key_from_file("/etc/sev-guest/vcek/private.pem");
+    if (eckey == NULL) {
+        fprintf(stderr, "Error generating ECDSA key pair\n");
+        return;
+    }
+    
+    // Create a SHA-384 context
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        fprintf(stderr, "Error creating SHA-384 context\n");
+        EC_KEY_free(eckey);
+        return;
+    }
+
+    // Initialize the SHA-384 context
+    if (EVP_DigestInit_ex(mdctx, EVP_sha384(), NULL) != 1) {
+        fprintf(stderr, "Error initializing SHA-384 context\n");
+        EVP_MD_CTX_free(mdctx);
+        EC_KEY_free(eckey);
+        return;
+    }
+
+    // Update the SHA-384 context with the attestation report data
+    if (EVP_DigestUpdate(mdctx, data, data_len) != 1) {
+        fprintf(stderr, "Error updating SHA-384 context\n");
+        EVP_MD_CTX_free(mdctx);
+        EC_KEY_free(eckey);
+        return;
+    }
+
+    // Get the SHA-384 hash value
+    unsigned char hash[SHA384_DIGEST_LENGTH];
+    unsigned int hash_len;
+    if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) {
+        fprintf(stderr, "Error finalizing SHA-384 context\n");
+        EVP_MD_CTX_free(mdctx);
+        EC_KEY_free(eckey);
+        return;
+    }
+
+    // Create an ECDSA signature
+    ECDSA_SIG* ecdsa_signature = ECDSA_do_sign(hash, hash_len, eckey);
+    if (ecdsa_signature == NULL) {
+        fprintf(stderr, "Error creating ECDSA signature\n");
+        EVP_MD_CTX_free(mdctx);
+        EC_KEY_free(eckey);
+        return;
+    }
+
+    // Convert the r and s values to byte arrays and save them in the signature structure
+    BIGNUM* r_bn;
+    BIGNUM* s_bn;
+    ECDSA_SIG_get0(ecdsa_signature, (const BIGNUM**)&r_bn, (const BIGNUM**)&s_bn);
+    BN_bn2lebinpad(r_bn, report->signature.r, sizeof(report->signature.r));
+    BN_bn2lebinpad(s_bn, report->signature.s, sizeof(report->signature.s));
+
+    // Clean up
+    ECDSA_SIG_free(ecdsa_signature);
+    EVP_MD_CTX_free(mdctx);
+    EC_KEY_free(eckey);
 }
 
 /*
@@ -159,7 +240,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg, struct fuse_file_info *
 
 	    	get_report(&report);
 
-	    	sign_attestation_report(&report, NULL);
+	    	sign_attestation_report(&report);
 
 	    	report_resp_msg.report_size = 1184;
 	    	report_resp_msg.report = report;
