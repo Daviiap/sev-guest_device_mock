@@ -37,18 +37,15 @@ EC_KEY* read_ecdsa_key_from_file(const char* key_file) {
 }
 
 void sign_attestation_report(struct attestation_report* report) {
-    // Convert attestation report (without the signature) to a byte array
     unsigned char* data = (unsigned char*)report;
     size_t data_len = offsetof(struct attestation_report, signature);
 
-    // Create an EC_KEY object for ECDSA
     EC_KEY* eckey = read_ecdsa_key_from_file("/etc/sev-guest/vcek/private.pem");
     if (eckey == NULL) {
         fprintf(stderr, "Error generating ECDSA key pair\n");
         return;
     }
     
-    // Create a SHA-384 context
     EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
     if (mdctx == NULL) {
         fprintf(stderr, "Error creating SHA-384 context\n");
@@ -56,7 +53,6 @@ void sign_attestation_report(struct attestation_report* report) {
         return;
     }
 
-    // Initialize the SHA-384 context
     if (EVP_DigestInit_ex(mdctx, EVP_sha384(), NULL) != 1) {
         fprintf(stderr, "Error initializing SHA-384 context\n");
         EVP_MD_CTX_free(mdctx);
@@ -64,7 +60,6 @@ void sign_attestation_report(struct attestation_report* report) {
         return;
     }
 
-    // Update the SHA-384 context with the attestation report data
     if (EVP_DigestUpdate(mdctx, data, data_len) != 1) {
         fprintf(stderr, "Error updating SHA-384 context\n");
         EVP_MD_CTX_free(mdctx);
@@ -72,7 +67,6 @@ void sign_attestation_report(struct attestation_report* report) {
         return;
     }
 
-    // Get the SHA-384 hash value
     unsigned char hash[SHA384_DIGEST_LENGTH];
     unsigned int hash_len;
     if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) {
@@ -82,7 +76,6 @@ void sign_attestation_report(struct attestation_report* report) {
         return;
     }
 
-    // Create an ECDSA signature
     ECDSA_SIG* ecdsa_signature = ECDSA_do_sign(hash, hash_len, eckey);
     if (ecdsa_signature == NULL) {
         fprintf(stderr, "Error creating ECDSA signature\n");
@@ -91,14 +84,12 @@ void sign_attestation_report(struct attestation_report* report) {
         return;
     }
 
-    // Convert the r and s values to byte arrays and save them in the signature structure
     BIGNUM* r_bn;
     BIGNUM* s_bn;
     ECDSA_SIG_get0(ecdsa_signature, (const BIGNUM**)&r_bn, (const BIGNUM**)&s_bn);
     BN_bn2lebinpad(r_bn, report->signature.r, sizeof(report->signature.r));
     BN_bn2lebinpad(s_bn, report->signature.s, sizeof(report->signature.s));
 
-    // Clean up
     ECDSA_SIG_free(ecdsa_signature);
     EVP_MD_CTX_free(mdctx);
     EC_KEY_free(eckey);
