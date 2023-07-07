@@ -35,6 +35,15 @@ make
 
 This command will use the provided Makefile to compile the code and generate the sev-guest binary inside the bin directory.
 
+5. Finally, create the `/etc/sev-guest/vcek` directory and copy the dummy VCEK private key into it:
+
+```bash
+sudo mkdir -p /etc/sev-guest/vcek
+sudo cp ./keys/vcek.key /etc/sev-guest/vcek/private.pem
+```
+
+You can use the `./keys/vcek.crt` to verify the report signature and the `./keys/cert_chain.pem` to verify the `vcek.crt` signature.
+
 ## Usage
 Once the code is successfully built, you can run the sev-guest binary. Make sure you have the necessary permissions to access and use cuse on your system.
 
