@@ -213,6 +213,8 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg, struct fuse_file_info *
 
 	    	get_report(&report);
 
+            memcpy(&report.report_data, &report_req.user_data, sizeof(report_req.user_data));
+
 	    	sign_attestation_report(&report);
 
 	    	report_resp_msg.report_size = 1184;
