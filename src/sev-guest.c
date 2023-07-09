@@ -33,6 +33,16 @@ static const char *usage =
 
 #define SEV_GUEST_OPT(t, p) {t, offsetof(struct sev_guest_param, p), 1}
 
+static uint8 report_id[32];
+
+void generate_random_array(uint8* array, int length) {
+	srand(time(NULL));
+    int i;
+    for (i = 0; i < length; i++) {
+        array[i] = rand() % 256;
+    }
+}
+
 static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi) {
 	fuse_reply_open(req, fi);
 }
@@ -69,6 +79,73 @@ static int sev_guest_process_arg(void *data, const char *arg, int key, struct fu
 	}
 }
 
+void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg, struct fuse_file_info *fi, unsigned flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+{
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	pid_t pid = ctx->pid;
+	off_t addr = (off_t)(uintptr_t)arg;
+
+	struct snp_guest_request_ioctl ioctl_request;
+	memset(&ioctl_request, 0x00, sizeof(ioctl_request));
+	
+    struct snp_report_req report_req;
+	memset(&report_req, 0x00, sizeof(report_req));
+	
+    struct snp_report_resp report_resp;
+	memset(&report_resp, 0x00, sizeof(report_resp));
+	
+    struct msg_report_resp report_resp_msg;
+	memset(&report_resp_msg, 0x00, sizeof(report_resp_msg));
+	
+    struct attestation_report report;
+	memset(&report, 0x00, sizeof(report));
+
+	if (flags & FUSE_IOCTL_COMPAT) {
+		fuse_reply_err(req, ENOSYS);
+		return;
+	}
+
+	char file[64];
+
+	switch (cmd) {
+	    case SNP_GET_REPORT:
+	    	sprintf(file, "/proc/%ld/mem", (long)pid);
+
+	    	int fd = open(file, O_RDWR);
+
+	    	ptrace(PTRACE_SEIZE, pid, 0, 0);
+
+	    	pread(fd, &ioctl_request, sizeof(ioctl_request), addr);
+	    	pread(fd, &report_req, sizeof(report_req), ioctl_request.req_data);
+	    	pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
+
+	    	memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
+
+	    	get_report(&report);
+
+            memcpy(&report.report_data, &report_req.user_data, sizeof(report_req.user_data));
+            memcpy(&report.report_id, &report_id, sizeof(report_id));
+
+	    	sign_attestation_report(&report);
+
+	    	report_resp_msg.report_size = 1184;
+	    	report_resp_msg.report = report;
+
+	    	pwrite(fd, &report_resp_msg, sizeof(report_resp_msg), ioctl_request.resp_data);
+
+	    	close(fd);
+
+	    	fuse_reply_ioctl(req, 0, NULL, 0);
+
+	    	ptrace(PTRACE_DETACH, pid, 0, 0);
+	    	waitpid(pid, NULL, 0);
+	    	
+            break;
+	    default:
+	    	fuse_reply_err(req, EINVAL);
+	}
+}
+
 static const struct cuse_lowlevel_ops sev_guest_clops = {
 	.open = sev_guest_open,
 	.ioctl = sev_guest_ioctl,
@@ -87,6 +164,8 @@ int main(int argc, char **argv) {
 		fuse_opt_free_args(&args);
 		return ret;
 	}
+
+	generate_random_array(report_id, 32);
 
 	memset(&dev_info, 0, sizeof(dev_info));
 	dev_info.dev_major = param.major;
