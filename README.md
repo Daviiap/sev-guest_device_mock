@@ -43,7 +43,7 @@ make
 
 This command will use the provided Makefile to compile the code and generate the sev-guest binary inside the bin directory.
 
-To verify the report's signature, you can utilize the `./keys_gen/keys/vcek.crt` file. It contains the necessary certificate for signature validation. Additionally, you can rely on the `./keys_gen/keys/cert_chain.pem` file to verify the signature of the `vcek.crt` certificate. This chain file ensures the authenticity and integrity of the certificate by including all the necessary intermediate certificates in the validation process such as in a authentic AMD environment.
+To verify the signature of the report, you can use the ./keys_gen/keys/vcek.crt file. It contains the essential certificate required for signature validation. Furthermore, you can rely on the ./keys_gen/keys/cert_chain.pem file to verify the signature of the vcek.crt certificate. This chain file guarantees the authenticity and integrity of the certificate by including all the necessary intermediate certificates in the validation process, similar to an authentic AMD environment.
 
 ## Usage
 Once the code is successfully built, you can run the sev-guest binary. Make sure you have the necessary permissions to access and use cuse on your system.
