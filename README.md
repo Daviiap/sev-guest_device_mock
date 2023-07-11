@@ -72,6 +72,6 @@ This command will remove the object files and the sev-guest binary from the bin 
 
 * Refactor the code;
 * Allow selection of VCEK or VLEK through ioctl request options;
-* Use a configuration file to define the report fields such as policy;
+* Use a configuration file to define the report fields;
 * Enhance error handling;
 * Allow extended attestation report requests;
