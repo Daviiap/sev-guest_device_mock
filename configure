@@ -1,0 +1,6 @@
+#!/bin/bash
+
+mkdir -p /etc/sev-guest/vcek
+cp ./keys/vcek.key /etc/sev-guest/vcek/private.pem
+cp ./keys/vcek.crt /etc/sev-guest/vcek/public.pem
+cp ./keys/cert_chain.pem /etc/sev-guest/vcek
