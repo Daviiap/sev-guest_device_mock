@@ -13,7 +13,7 @@ Please note that this mock implementation does not interact with the actual AMD 
 
 To build the code, follow these steps:
 
-1. Ensure that you have `gcc`, `pkg-config` and `fuse` installed on your system.
+1. Ensure that you have `gcc`, `pkg-config`, `fuse` and `golang` installed on your system.
 
 2. Clone this repository to your local machine:
 
@@ -27,7 +27,15 @@ git clone https://github.com/Daviiap/sev-guest_device_mock.git
 cd sev-guest_device_mock
 ```
 
-4. Now, you can build the code:
+4. Run the configure script:
+
+```bash
+./configure
+```
+
+You must have root privilege to run the configure script. It will generate the dummy VCEK and VLEK such as the respective cert_chain to both keys and move it to `/etc/sev-guest` directory.
+
+5. Now, you can build the code:
 
 ```bash
 make
@@ -35,14 +43,7 @@ make
 
 This command will use the provided Makefile to compile the code and generate the sev-guest binary inside the bin directory.
 
-5. Finally, create the `/etc/sev-guest/vcek` directory and copy the dummy VCEK private key into it:
-
-```bash
-sudo mkdir -p /etc/sev-guest/vcek
-sudo cp ./keys/vcek.key /etc/sev-guest/vcek/private.pem
-```
-
-You can use the `./keys/vcek.crt` to verify the report signature and the `./keys/cert_chain.pem` to verify the `vcek.crt` signature.
+To verify the report's signature, you can utilize the `./keys_gen/keys/vcek.crt` file. It contains the necessary certificate for signature validation. Additionally, you can rely on the `./keys_gen/keys/cert_chain.pem` file to verify the signature of the `vcek.crt` certificate. This chain file ensures the authenticity and integrity of the certificate by including all the necessary intermediate certificates in the validation process such as in a authentic AMD environment.
 
 ## Usage
 Once the code is successfully built, you can run the sev-guest binary. Make sure you have the necessary permissions to access and use cuse on your system.
