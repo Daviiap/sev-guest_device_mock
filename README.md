@@ -33,7 +33,7 @@ cd sev-guest_device_mock
 ./configure
 ```
 
-You must have root privilege to run the configure script. It will generate the dummy VCEK and VLEK such as the respective cert_chain to both keys and move it to `/etc/sev-guest` directory.
+To run the configure script, you need to have root privileges. This script will generate dummy VCEK and VLEK, along with the respective cert_chain for both keys. Once generated, the script will move these files to the /etc/sev-guest directory.
 
 5. Now, you can build the code:
 
