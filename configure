@@ -1,20 +1,27 @@
 #!/bin/bash
 
-pushd keys_gen
+KEYS_GEN_DIR="keys_gen"
+TARGET_DIR="/etc/sev-guest"
+CERT_CHAIN_FILE="cert_chain.pem"
+
+# Build keys
+pushd "$KEYS_GEN_DIR"
 go run main.go
-
-sudo mkdir -p /etc/sev-guest/vcek
-sudo mkdir -p /etc/sev-guest/vlek
-echo "Created /etc/sev-guest directory"
-
-sudo cp ./keys/vcek.key /etc/sev-guest/vcek/private.pem
-sudo cp ./keys/vcek.crt /etc/sev-guest/vcek/public.pem
-sudo cp ./keys/cert_chain.pem /etc/sev-guest/vcek
-echo "Copyed vcek key, cert and cert chain to /etc/sev-guest"
-
-sudo cp ./keys/vlek.key /etc/sev-guest/vlek/private.pem
-sudo cp ./keys/vlek.crt /etc/sev-guest/vlek/public.pem
-sudo cp ./keys/cert_chain.pem /etc/sev-guest/vlek
-echo "Copyed vlek key, cert and cert chain to /etc/sev-guest"
-
 popd
+
+# Create target directories
+sudo mkdir -p "$TARGET_DIR/vcek"
+sudo mkdir -p "$TARGET_DIR/vlek"
+echo "Created $TARGET_DIR directory"
+
+# Copy vcek files
+sudo cp "$KEYS_GEN_DIR/keys/vcek.key" "$TARGET_DIR/vcek/private.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vcek.crt" "$TARGET_DIR/vcek/public.pem"
+sudo cp "$KEYS_GEN_DIR/keys/$CERT_CHAIN_FILE" "$TARGET_DIR/vcek/"
+echo "Copied vcek key, cert, and cert chain to $TARGET_DIR/vcek"
+
+# Copy vlek files
+sudo cp "$KEYS_GEN_DIR/keys/vlek.key" "$TARGET_DIR/vlek/private.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vlek.crt" "$TARGET_DIR/vlek/public.pem"
+sudo cp "$KEYS_GEN_DIR/keys/$CERT_CHAIN_FILE" "$TARGET_DIR/vlek/"
+echo "Copied vlek key, cert, and cert chain to $TARGET_DIR/vlek"
