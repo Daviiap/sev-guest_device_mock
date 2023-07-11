@@ -68,6 +68,10 @@ make clean
 
 This command will remove the object files and the sev-guest binary from the bin directory.
 
+## Ref
+
+[SEV Secure Nested Paging Firmware ABI Specification](https://www.amd.com/system/files/TechDocs/56860.pdf)
+
 ## Future work
 
 * Refactor the code;
