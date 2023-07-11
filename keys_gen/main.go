@@ -9,7 +9,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
@@ -57,7 +56,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 		return nil, nil
 	}
 
-	caKeyFile, err := os.Create("./certs/ark.key")
+	caKeyFile, err := os.Create("./keys/ark.key")
 	if err != nil {
 		fmt.Printf("Failed to create CA private key file: %v", err)
 		return nil, nil
@@ -68,7 +67,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 		return nil, nil
 	}
 
-	caCertFile, err := os.Create("./certs/ark.crt")
+	caCertFile, err := os.Create("./keys/ark.crt")
 	if err != nil {
 		fmt.Printf("Failed to create CA certificate file: %v", err)
 		return nil, nil
@@ -121,7 +120,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x
 		return nil, nil
 	}
 
-	askKeyFile, err := os.Create("./certs/ask.key")
+	askKeyFile, err := os.Create("./keys/ask.key")
 	if err != nil {
 		fmt.Printf("Failed to create ask CA private key file: %v", err)
 		return nil, nil
@@ -132,7 +131,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x
 		return nil, nil
 	}
 
-	askCertFile, err := os.Create("./certs/ask.crt")
+	askCertFile, err := os.Create("./keys/ask.crt")
 	if err != nil {
 		fmt.Printf("Failed to create ask CA certificate file: %v", err)
 		return nil, nil
@@ -177,7 +176,7 @@ func generateChipKey(name string, askCert *x509.Certificate, askPrivateKey *rsa.
 		return
 	}
 
-	keyFile, err := os.Create("./certs/" + name + ".key")
+	keyFile, err := os.Create("./keys/" + name + ".key")
 	if err != nil {
 		fmt.Printf("Failed to create private key file: %v", err)
 		return
@@ -189,7 +188,7 @@ func generateChipKey(name string, askCert *x509.Certificate, askPrivateKey *rsa.
 		return
 	}
 
-	certFile, err := os.Create("./certs/" + name + ".crt")
+	certFile, err := os.Create("./keys/" + name + ".crt")
 	if err != nil {
 		fmt.Printf("Failed to create certificate file: %v", err)
 		return
@@ -204,12 +203,12 @@ func generateChipKey(name string, askCert *x509.Certificate, askPrivateKey *rsa.
 }
 
 func buildCertChain(cert1File, cert2File, outputFile string) error {
-	cert1Bytes, err := ioutil.ReadFile(cert1File)
+	cert1Bytes, err := os.ReadFile(cert1File)
 	if err != nil {
 		return err
 	}
 
-	cert2Bytes, err := ioutil.ReadFile(cert2File)
+	cert2Bytes, err := os.ReadFile(cert2File)
 	if err != nil {
 		return err
 	}
@@ -237,7 +236,7 @@ func buildCertChain(cert1File, cert2File, outputFile string) error {
 		})...)
 	}
 
-	err = ioutil.WriteFile(outputFile, chainPEM, 0644)
+	err = os.WriteFile(outputFile, chainPEM, 0644)
 	if err != nil {
 		return err
 	}
@@ -286,11 +285,11 @@ func validateCertChain(vcekPath string, rootPath string) (bool, error) {
 func main() {
 	arkCert, arkKey := generateARK()
 	askCert, askPrivateKey := generateASK(arkCert, arkKey)
-	buildCertChain("./certs/ark.crt", "./certs/ask.crt", "./certs/cert_chain.pem")
+	buildCertChain("./keys/ark.crt", "./keys/ask.crt", "./keys/cert_chain.pem")
 	generateChipKey("vcek", askCert, askPrivateKey)
 	generateChipKey("vlek", askCert, askPrivateKey)
-	valid, _ := validateCertChain("./certs/vcek.crt", "./certs/cert_chain.pem")
+	valid, _ := validateCertChain("./keys/vcek.crt", "./keys/cert_chain.pem")
 	fmt.Println("VCEK valid: ", valid)
-	valid, _ = validateCertChain("./certs/vlek.crt", "./certs/cert_chain.pem")
+	valid, _ = validateCertChain("./keys/vlek.crt", "./keys/cert_chain.pem")
 	fmt.Println("VLEK valid: ", valid)
 }
