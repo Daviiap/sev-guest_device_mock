@@ -1,13 +1,13 @@
 # SEV-GUEST DEVICE MOCK
-This repository contains an implementation of a mock `sev-guest` character device using `cuse` (Character device in user space). The `sev-guest` character device is typically exposed inside AMD SEV-SNP guests VMs, allowing the guest to make requests to the AMD Secure Processor.
+This repository contains an implementation of a `sev-guest` character device mock using [CUSE (Character device in user space)](https://github.com/libfuse/libfuse/). The sev-guest character device is typically exposed inside AMD SEV-SNP guests VMs, allowing the guest to make requests to the AMD Secure Processor.
+
+**Please note that this mock implementation does not interact with the actual AMD Secure Processor and is intended for testing or educational purposes only.**
 
 ## Implemented Requests
 
 Currently, the following request is implemented in this mock `sev-guest` chardev:
 
 - **GET_REPORT**: This request retrieves a report containing information about the AMD Secure Processor and the Guest VM. The implementation provides a mock report for testing purposes.
-
-Please note that this mock implementation does not interact with the actual AMD Secure Processor and is intended for testing or educational purposes only.
 
 ## Build Instructions
 
