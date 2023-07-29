@@ -22,8 +22,10 @@ struct snp_report_req {
 	/* The vmpl level to be included in the report */
 	__u32 vmpl;
 
+	__u32 key_sel;
+
 	/* Must be zero filled */
-	__u8 rsvd[28];
+	__u8 rsvd[24];
 };
 
 struct snp_report_resp {
