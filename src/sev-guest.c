@@ -125,13 +125,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
       memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
-      get_report(&report);
-
-      memcpy(&report.report_data, &report_req.user_data,
-             sizeof(report_req.user_data));
-      memcpy(&report.report_id, &report_id, sizeof(report_id));
-
-      sign_attestation_report(&report, report_req.key_sel);
+      get_report(&report, report_req.user_data, report_id, report_req.key_sel);
 
       report_resp_msg.report_size = 1184;
       report_resp_msg.report = report;
