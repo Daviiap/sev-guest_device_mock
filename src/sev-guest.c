@@ -127,8 +127,8 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
       get_report(&report, report_req.user_data, report_id, report_req.key_sel);
 
-      report_resp_msg.report_size = 1184;
-      report_resp_msg.report = report;
+      memcpy(&report_resp_msg.report, &report, sizeof(report));
+      report_resp_msg.report_size = (int) sizeof(report);
 
       pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
              ioctl_request.resp_data);
