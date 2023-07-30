@@ -134,7 +134,9 @@ void get_report(struct attestation_report* report, uint8 report_data[64],
                      0x8E, 0x51, 0x57, 0xD5, 0xE7, 0x58, 0x80, 0x57, 0xA7, 0x15,
                      0xA8, 0x27, 0x2D, 0xBA};
 
-  /*  Set to 2h for SNP specification */
+  /* TODO: indicate the key used on report signing */
+
+  /*  Set to 2h on SNP specification */
   report->version = 0x02;
   report->guest_svn = 0x00;
   report->policy = 0x30000;
@@ -151,9 +153,9 @@ void get_report(struct attestation_report* report, uint8 report_data[64],
   report->platform_info = 0x03;
   report->flags = 0x00;
   report->reserved0 = 0x00;
-  memcpy(report->measurement, &measurement, sizeof(measurement));
-  memcpy(report->report_data, report_data, sizeof(report->report_data));
-  memcpy(report->report_id, report_id, sizeof(report->report_id));
+  memcpy(&report->measurement, measurement, sizeof(measurement));
+  memcpy(&report->report_data, report_data, sizeof(report->report_data));
+  memcpy(&report->report_id, report_id, sizeof(report->report_id));
   memset(&report->host_data, 0x00, sizeof(report->host_data));
   memset(&report->id_key_digest, 0x00, sizeof(report->id_key_digest));
   memset(&report->author_key_digest, 0x00, sizeof(report->author_key_digest));
@@ -170,6 +172,12 @@ void get_report(struct attestation_report* report, uint8 report_data[64],
   report->current_minor = 0x34;
   report->current_major = 0x01;
   report->reserved2 = 0x00;
+  report->commited_tcb.boot_loader = 0x03;
+  report->commited_tcb.microcode = 0x73;
+  memset(&report->commited_tcb.reserved, 0x00,
+         sizeof(report->commited_tcb.reserved));
+  report->commited_tcb.snp = 0x08;
+  report->commited_tcb.tee = 0x00;
   report->commited_build = 0x04;
   report->commited_minor = 0x34;
   report->commited_major = 0x01;
