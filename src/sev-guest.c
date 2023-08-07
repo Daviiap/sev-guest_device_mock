@@ -38,14 +38,6 @@ static const char *usage =
 
 static struct attestation_report report;
 
-void generate_random_array(uint8 *array, int length) {
-  srand(time(NULL));
-  int i;
-  for (i = 0; i < length; i++) {
-    array[i] = rand() % 256;
-  }
-}
-
 static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi) {
   fuse_reply_open(req, fi);
 }
@@ -163,11 +155,7 @@ int main(int argc, char **argv) {
     return ret;
   }
 
-  uint8 report_data[32];
-  memset(report_data, 0x00, sizeof(report_data));
-  uint8 report_id[32];
-  generate_random_array(report_id, 32);
-  get_report(&report, report_data, report_id, 0);
+  get_report(&report);
 
   memset(&dev_info, 0, sizeof(dev_info));
   dev_info.dev_major = param.major;

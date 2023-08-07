@@ -41,6 +41,14 @@ EC_KEY* read_ecdsa_key_from_file(const char* key_file) {
   return eckey;
 }
 
+void generate_random_array(uint8* array, int length) {
+  srand(time(NULL));
+  int i;
+  for (i = 0; i < length; i++) {
+    array[i] = rand() % 256;
+  }
+}
+
 void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
   unsigned char* data = (unsigned char*)report;
   size_t data_len = offsetof(struct attestation_report, signature);
@@ -121,8 +129,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
 /*
     Build an attestation report with mocked data
 */
-void get_report(struct attestation_report* report, uint8 report_data[64],
-                uint8 report_id[32], __u32 signing_key_sel) {
+void get_report(struct attestation_report* report, uint8 report_id[32]) {
   uint8 measurement[] = {
       0x72, 0xD9, 0x9E, 0x55, 0x0E, 0x7C, 0xB1, 0x2A, 0xBA, 0xB9, 0xC9, 0x61,
       0xE4, 0x7F, 0x34, 0x3A, 0xCC, 0x8F, 0xF3, 0x0B, 0x6A, 0x62, 0xB4, 0x2B,
@@ -156,8 +163,8 @@ void get_report(struct attestation_report* report, uint8 report_data[64],
   report->flags = 0x00;
   report->reserved0 = 0x00;
   memcpy(&report->measurement, measurement, sizeof(measurement));
-  memcpy(&report->report_data, report_data, sizeof(report->report_data));
-  memcpy(&report->report_id, report_id, sizeof(report->report_id));
+  memset(&report->report_data, 0x00, sizeof(report->report_data));
+  generate_random_array(report->report_id, 32);
   memset(&report->host_data, 0x00, sizeof(report->host_data));
   memset(&report->id_key_digest, 0x00, sizeof(report->id_key_digest));
   memset(&report->author_key_digest, 0x00, sizeof(report->author_key_digest));
@@ -192,6 +199,4 @@ void get_report(struct attestation_report* report, uint8 report_data[64],
   report->launch_tcb.tee = 0x00;
   memset(&report->reserved4, 0x00, sizeof(report->reserved4));
   memset(&report->signature.reserved, 0x00, sizeof(report->signature.reserved));
-
-  sign_attestation_report(report, signing_key_sel);
 }
