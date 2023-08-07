@@ -52,7 +52,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
       if (eckey == NULL) {
         eckey = read_ecdsa_key_from_file(PRIVATE_VCEK_PATH);
       } else {
-        report->flags += 4;
+        report->flags += 0b100;
       }
       break;
     case 1:
@@ -60,7 +60,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
       break;
     case 2:
       eckey = read_ecdsa_key_from_file(PRIVATE_VLEK_PATH);
-      report->flags += 4;
+      report->flags += 0b100;
       break;
   }
 
@@ -137,10 +137,9 @@ void get_report(struct attestation_report* report, uint8 report_data[64],
                      0x8E, 0x51, 0x57, 0xD5, 0xE7, 0x58, 0x80, 0x57, 0xA7, 0x15,
                      0xA8, 0x27, 0x2D, 0xBA};
 
-  /* TODO: indicate the key used on report signing */
-
   /*  Set to 2h on SNP specification */
   report->version = 0x02;
+
   report->guest_svn = 0x00;
   report->policy = 0x30000;
   memset(&report->family_id, 0x00, sizeof(report->family_id));

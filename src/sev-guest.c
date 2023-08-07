@@ -36,7 +36,7 @@ static const char *usage =
 #define SEV_GUEST_OPT(t, p) \
   { t, offsetof(struct sev_guest_param, p), 1 }
 
-static uint8 report_id[32];
+static struct attestation_report report;
 
 void generate_random_array(uint8 *array, int length) {
   srand(time(NULL));
@@ -101,9 +101,6 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
   struct msg_report_resp report_resp_msg;
   memset(&report_resp_msg, 0x00, sizeof(report_resp_msg));
 
-  struct attestation_report report;
-  memset(&report, 0x00, sizeof(report));
-
   if (flags & FUSE_IOCTL_COMPAT) {
     fuse_reply_err(req, ENOSYS);
     return;
@@ -124,8 +121,9 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
       pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
 
       memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
+      memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
 
-      get_report(&report, report_req.user_data, report_id, report_req.key_sel);
+      sign_attestation_report(&report, report_req.key_sel);
 
       memcpy(&report_resp_msg.report, &report, sizeof(report));
       report_resp_msg.report_size = (int) sizeof(report);
@@ -165,7 +163,11 @@ int main(int argc, char **argv) {
     return ret;
   }
 
+  uint8 report_data[32];
+  memset(report_data, 0x00, sizeof(report_data));
+  uint8 report_id[32];
   generate_random_array(report_id, 32);
+  get_report(&report, report_data, report_id, 0);
 
   memset(&dev_info, 0, sizeof(dev_info));
   dev_info.dev_major = param.major;
