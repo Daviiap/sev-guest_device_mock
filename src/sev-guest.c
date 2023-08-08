@@ -113,6 +113,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
       pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
 
       memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
+
       memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
 
       sign_attestation_report(&report, report_req.key_sel);

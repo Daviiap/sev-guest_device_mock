@@ -1,0 +1,52 @@
+version: 2 # DEFAULT VALUE ACORDING TO SNP ABI SPEC
+guest_svn: 0
+policy:
+  abi_minor: 0
+  abi_major: 0
+  smt: true
+  migrate_ma: false
+  debug: false
+  single_socket: false
+family_id: "00000000000000000000000000000000"
+image_id: "00000000000000000000000000000000"
+vmpl: 0
+signature_algo: 1
+current_tcb:
+  boot_loader: 3
+  tee: 0
+  snp: 8
+  microcode: 115
+platform_info:
+  tsme_en: true
+  smp_en: true
+flags:
+  mask_chip_key: false
+  author_key_en: false
+measurement: "72d99e550e7cb12abab9c961e47f343acc8ff30b6a62b42b5b593e78ddbd54df6b090b2f66299a480e520ac9e2955f70"
+host_data: "0000000000000000000000000000000000000000000000000000000000000000"
+id_key_digest: "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+author_key_digest: "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+report_id: "2d5b5173a34df0745a2e8827934ad0e012cbe932d8b5a73a2394fb141733e144"
+report_id_ma: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+reported_tcb:
+  boot_loader: 3
+  tee: 0
+  snp: 8
+  microcode: 115
+chip_id: "20028d4636c268b3bd525b429d333c28273cfcb63874f8cff78fa613887002990efec70c4c538bac5e084371f3d76659360a8e5157d5e7588057a715a8272dba"
+commited_tcb:
+  boot_loader: 3
+  tee: 0
+  snp: 8
+  microcode: 115
+current_build: 4
+current_minor: 52
+current_major: 1
+commited_build: 4
+commited_minor: 52
+commited_major: 1
+launch_tcb:
+  boot_loader: 3
+  tee: 0
+  snp: 8
+  microcode: 115

@@ -60,7 +60,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
       if (eckey == NULL) {
         eckey = read_ecdsa_key_from_file(PRIVATE_VCEK_PATH);
       } else {
-        report->flags += 0b100;
+        report->flags += 0b00000100;
       }
       break;
     case 1:
@@ -68,7 +68,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
       break;
     case 2:
       eckey = read_ecdsa_key_from_file(PRIVATE_VLEK_PATH);
-      report->flags += 0b100;
+      report->flags += 0b00000100;
       break;
   }
 
