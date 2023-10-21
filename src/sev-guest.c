@@ -81,35 +81,37 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
   pid_t pid = ctx->pid;
   off_t addr = (off_t)(uintptr_t)arg;
 
+  struct snp_guest_request_ioctl ioctl_request;
+  memset(&ioctl_request, 0x00, sizeof(ioctl_request));
+  
+  struct snp_report_req report_req;
+  memset(&report_req, 0x00, sizeof(report_req));
+  
+  struct snp_report_resp report_resp;
+  memset(&report_resp, 0x00, sizeof(report_resp));
+  
+  struct msg_report_resp report_resp_msg;
+  memset(&report_resp_msg, 0x00, sizeof(report_resp_msg));
+  
+  if (flags & FUSE_IOCTL_COMPAT) {
+    fuse_reply_err(req, ENOSYS);
+    return;
+  }
+  
+  char file[64];
+  
+  sprintf(file, "/proc/%ld/mem", (long)pid);
+  
+  int fd = open(file, O_RDWR);
+  
+  ptrace(PTRACE_SEIZE, pid, 0, 0);
+
+  pread(fd, &ioctl_request, sizeof(ioctl_request), addr);
+  pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
+
   switch (cmd) {
     case SNP_GET_REPORT:
-      struct snp_guest_request_ioctl ioctl_request;
-      memset(&ioctl_request, 0x00, sizeof(ioctl_request));
-
-      struct snp_report_req report_req;
-      memset(&report_req, 0x00, sizeof(report_req));
-
-      struct snp_report_resp report_resp;
-      memset(&report_resp, 0x00, sizeof(report_resp));
-
-      struct msg_report_resp report_resp_msg;
-      memset(&report_resp_msg, 0x00, sizeof(report_resp_msg));
-
-      if (flags & FUSE_IOCTL_COMPAT) {
-        fuse_reply_err(req, ENOSYS);
-        return;
-      }
-
-      char file[64];
-      sprintf(file, "/proc/%ld/mem", (long)pid);
-
-      int fd = open(file, O_RDWR);
-
-      ptrace(PTRACE_SEIZE, pid, 0, 0);
-
-      pread(fd, &ioctl_request, sizeof(ioctl_request), addr);
       pread(fd, &report_req, sizeof(report_req), ioctl_request.req_data);
-      pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
 
       memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
@@ -132,37 +134,11 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
       break;
     case SNP_GET_EXT_REPORT:
-      struct snp_guest_request_ioctl ioctl_request;
-      memset(&ioctl_request, 0x00, sizeof(ioctl_request));
-
       struct snp_ext_report_req ext_report_req;
       memset(&ext_report_req, 0x00, sizeof(ext_report_req));
 
-      struct snp_report_req report_req;
-      memset(&report_req, 0x00, sizeof(report_req));
-
-      struct snp_report_resp report_resp;
-      memset(&report_resp, 0x00, sizeof(report_resp));
-
-      struct msg_report_resp report_resp_msg;
-      memset(&report_resp_msg, 0x00, sizeof(report_resp_msg));
-
-      if (flags & FUSE_IOCTL_COMPAT) {
-        fuse_reply_err(req, ENOSYS);
-        return;
-      }
-
-      char file[64];
-      sprintf(file, "/proc/%ld/mem", (long)pid);
-
-      int fd = open(file, O_RDWR);
-
-      ptrace(PTRACE_SEIZE, pid, 0, 0);
-
-      pread(fd, &ioctl_request, sizeof(ioctl_request), addr);
       pread(fd, &ext_report_req, sizeof(ext_report_req), ioctl_request.req_data);
       pread(fd, &report_req, sizeof(report_req), ext_report_req.data);
-      pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
 
       memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
