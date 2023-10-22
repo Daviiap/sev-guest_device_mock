@@ -22,6 +22,9 @@
 #include "./sev_guest_ioctl.h"
 #include "snp/attestation.h"
 
+char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
+char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
+
 static const char *usage =
     "usage: cusexmp [options]\n"
     "\n"
@@ -152,9 +155,28 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     report_req = ext_report_req.data;
 
     /* Must read the cert file and copy to it */
-    ext_report_req.certs_len = 1024;
-    uint8 certs[1024];
-    memset(&certs, 0x01, sizeof(certs));
+    ext_report_req.certs_len = 2048;
+    uint8 certs[2048];
+    int cert_fd;
+
+    switch (report_req.key_sel)
+    {
+    case 0:
+      cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
+      if (cert_fd == -1)
+      {
+        cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
+      }
+      break;
+    case 1:
+      cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
+      break;
+    case 2:
+      cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
+      break;
+    }
+
+    read(cert_fd, &certs, sizeof(certs));
 
     memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
@@ -169,7 +191,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
            ioctl_request.resp_data);
     pwrite(fd, &ext_report_req, sizeof(ext_report_req), ioctl_request.req_data);
-    
+
     pwrite(fd, &certs, sizeof(certs), ext_report_req.certs_address);
 
     close(fd);
