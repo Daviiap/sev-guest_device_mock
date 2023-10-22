@@ -33,16 +33,20 @@ static const char *usage =
     "    -s                    disable multi-threaded operation\n"
     "\n";
 
-#define SEV_GUEST_OPT(t, p) \
-  { t, offsetof(struct sev_guest_param, p), 1 }
+#define SEV_GUEST_OPT(t, p)                   \
+  {                                           \
+    t, offsetof(struct sev_guest_param, p), 1 \
+  }
 
 static struct attestation_report report;
 
-static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi) {
+static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi)
+{
   fuse_reply_open(req, fi);
 }
 
-struct sev_guest_param {
+struct sev_guest_param
+{
   unsigned major;
   unsigned minor;
   int is_help;
@@ -58,110 +62,115 @@ static const struct fuse_opt sev_guest_opts[] = {
     FUSE_OPT_END};
 
 static int sev_guest_process_arg(void *data, const char *arg, int key,
-                                 struct fuse_args *outargs) {
+                                 struct fuse_args *outargs)
+{
   struct sev_guest_param *param = data;
 
   (void)outargs;
   (void)arg;
 
-  switch (key) {
-    case 0:
-      param->is_help = 1;
-      fprintf(stderr, "%s", usage);
-      return fuse_opt_add_arg(outargs, "-ho");
-    default:
-      return 1;
+  switch (key)
+  {
+  case 0:
+    param->is_help = 1;
+    fprintf(stderr, "%s", usage);
+    return fuse_opt_add_arg(outargs, "-ho");
+  default:
+    return 1;
   }
 }
 
 void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
                      struct fuse_file_info *fi, unsigned flags,
-                     const void *in_buf, size_t in_bufsz, size_t out_bufsz) {
+                     const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+{
   const struct fuse_ctx *ctx = fuse_req_ctx(req);
   pid_t pid = ctx->pid;
   off_t addr = (off_t)(uintptr_t)arg;
 
   struct snp_guest_request_ioctl ioctl_request;
   memset(&ioctl_request, 0x00, sizeof(ioctl_request));
-  
+
   struct snp_report_req report_req;
   memset(&report_req, 0x00, sizeof(report_req));
-  
+
   struct snp_report_resp report_resp;
   memset(&report_resp, 0x00, sizeof(report_resp));
-  
+
   struct msg_report_resp report_resp_msg;
   memset(&report_resp_msg, 0x00, sizeof(report_resp_msg));
-  
-  if (flags & FUSE_IOCTL_COMPAT) {
+
+  struct snp_ext_report_req ext_report_req;
+  memset(&ext_report_req, 0x00, sizeof(ext_report_req));
+
+  if (flags & FUSE_IOCTL_COMPAT)
+  {
     fuse_reply_err(req, ENOSYS);
     return;
   }
-  
+
   char file[64];
-  
+
   sprintf(file, "/proc/%ld/mem", (long)pid);
-  
+
   int fd = open(file, O_RDWR);
-  
+
   ptrace(PTRACE_SEIZE, pid, 0, 0);
 
   pread(fd, &ioctl_request, sizeof(ioctl_request), addr);
   pread(fd, &report_resp, sizeof(report_resp), ioctl_request.resp_data);
 
-  switch (cmd) {
-    case SNP_GET_REPORT:
-      pread(fd, &report_req, sizeof(report_req), ioctl_request.req_data);
+  switch (cmd)
+  {
+  case SNP_GET_REPORT:
+    pread(fd, &report_req, sizeof(report_req), ioctl_request.req_data);
 
-      memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
+    memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
-      memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
+    memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
 
-      sign_attestation_report(&report, report_req.key_sel);
+    sign_attestation_report(&report, report_req.key_sel);
 
-      memcpy(&report_resp_msg.report, &report, sizeof(report));
-      report_resp_msg.report_size = (int) sizeof(report);
+    memcpy(&report_resp_msg.report, &report, sizeof(report));
+    report_resp_msg.report_size = (int)sizeof(report);
 
-      pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
-             ioctl_request.resp_data);
+    pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
+           ioctl_request.resp_data);
 
-      close(fd);
+    close(fd);
 
-      fuse_reply_ioctl(req, 0, NULL, 0);
+    fuse_reply_ioctl(req, 0, NULL, 0);
 
-      ptrace(PTRACE_DETACH, pid, 0, 0);
-      waitpid(pid, NULL, 0);
+    ptrace(PTRACE_DETACH, pid, 0, 0);
+    waitpid(pid, NULL, 0);
 
-      break;
-    case SNP_GET_EXT_REPORT:
-      struct snp_ext_report_req ext_report_req;
-      memset(&ext_report_req, 0x00, sizeof(ext_report_req));
+    break;
+  case SNP_GET_EXT_REPORT:
+    pread(fd, &ext_report_req, sizeof(ext_report_req), ioctl_request.req_data);
+    report_req = ext_report_req.data;
 
-      pread(fd, &ext_report_req, sizeof(ext_report_req), ioctl_request.req_data);
-      pread(fd, &report_req, sizeof(report_req), ext_report_req.data);
+    memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
-      memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
+    memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
 
-      memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
+    sign_attestation_report(&report, report_req.key_sel);
 
-      sign_attestation_report(&report, report_req.key_sel);
+    memcpy(&report_resp_msg.report, &report, sizeof(report));
+    report_resp_msg.report_size = (int)sizeof(report);
 
-      memcpy(&report_resp_msg.report, &report, sizeof(report));
-      report_resp_msg.report_size = (int) sizeof(report);
+    pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
+           ioctl_request.resp_data);
 
-      pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
-             ioctl_request.resp_data);
+    close(fd);
 
-      close(fd);
+    fuse_reply_ioctl(req, 0, NULL, 0);
 
-      fuse_reply_ioctl(req, 0, NULL, 0);
+    ptrace(PTRACE_DETACH, pid, 0, 0);
+    waitpid(pid, NULL, 0);
 
-      ptrace(PTRACE_DETACH, pid, 0, 0);
-      waitpid(pid, NULL, 0);
-
-      break;
-    default:
-      fuse_reply_err(req, EINVAL);
+    break;
+  default:
+    fuse_reply_err(req, EINVAL);
   }
 }
 
@@ -170,7 +179,8 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
     .ioctl = sev_guest_ioctl,
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
   struct sev_guest_param param = {0, 0, 0};
   char dev_name[18] = "DEVNAME=sev-guest";
@@ -178,7 +188,8 @@ int main(int argc, char **argv) {
   struct cuse_info dev_info;
   int ret = 1;
 
-  if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
+  if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg))
+  {
     printf("failed to parse option\n");
     fuse_opt_free_args(&args);
     return ret;
