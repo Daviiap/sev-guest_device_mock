@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <uuid/uuid.h>
 
 #include "./sev_guest_ioctl.h"
 #include "snp/attestation.h"
@@ -128,6 +129,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
     memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
+    report.vmpl = report_req.vmpl;
 
     sign_attestation_report(&report, report_req.key_sel);
 
@@ -152,6 +154,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
     memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
+    report.vmpl = report_req.vmpl;
 
     sign_attestation_report(&report, report_req.key_sel);
 
