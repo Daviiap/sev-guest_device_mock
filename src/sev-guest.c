@@ -151,6 +151,11 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     pread(fd, &ext_report_req, sizeof(ext_report_req), ioctl_request.req_data);
     report_req = ext_report_req.data;
 
+    /* Must read the cert file and copy to it */
+    ext_report_req.certs_len = 1024;
+    uint8 certs[1024];
+    memset(&certs, 0x01, sizeof(certs));
+
     memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
 
     memcpy(&report.report_data, report_req.user_data, sizeof(report_req.user_data));
@@ -163,6 +168,9 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
     pwrite(fd, &report_resp_msg, sizeof(report_resp_msg),
            ioctl_request.resp_data);
+    pwrite(fd, &ext_report_req, sizeof(ext_report_req), ioctl_request.req_data);
+    
+    pwrite(fd, &certs, sizeof(certs), ext_report_req.certs_address);
 
     close(fd);
 

@@ -15,7 +15,8 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
-struct snp_report_req {
+struct snp_report_req
+{
 	/* user data that should be included in the report */
 	__u8 user_data[64];
 
@@ -28,12 +29,14 @@ struct snp_report_req {
 	__u8 rsvd[24];
 };
 
-struct snp_report_resp {
+struct snp_report_resp
+{
 	/* response data, see SEV-SNP spec for the format */
 	__u8 data[4000];
 };
 
-struct snp_derived_key_req {
+struct snp_derived_key_req
+{
 	__u32 root_key_select;
 	__u32 rsvd;
 	__u64 guest_field_select;
@@ -42,12 +45,14 @@ struct snp_derived_key_req {
 	__u64 tcb_version;
 };
 
-struct snp_derived_key_resp {
+struct snp_derived_key_resp
+{
 	/* response data, see SEV-SNP spec for the format */
 	__u8 data[64];
 };
 
-struct snp_guest_request_ioctl {
+struct snp_guest_request_ioctl
+{
 	/* message version number (must be non-zero) */
 	__u8 msg_version;
 
@@ -59,7 +64,8 @@ struct snp_guest_request_ioctl {
 	__u64 fw_err;
 };
 
-struct snp_ext_report_req {
+struct snp_ext_report_req
+{
 	struct snp_report_req data;
 
 	/* where to copy the certificate blob */
@@ -69,7 +75,7 @@ struct snp_ext_report_req {
 	__u32 certs_len;
 };
 
-#define SNP_GUEST_REQ_IOC_TYPE	'S'
+#define SNP_GUEST_REQ_IOC_TYPE 'S'
 
 /* Get SNP attestation report */
 #define SNP_GET_REPORT _IOWR(SNP_GUEST_REQ_IOC_TYPE, 0x0, struct snp_guest_request_ioctl)
