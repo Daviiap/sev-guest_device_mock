@@ -155,8 +155,9 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     report_req = ext_report_req.data;
 
     /* Must read the cert file and copy to it */
-    ext_report_req.certs_len = 2048;
-    uint8 certs[2048];
+    ext_report_req.certs_len = 1440;
+    uint8 certs[1440];
+    memset(&certs, 0x00, sizeof(certs));
     int cert_fd;
 
     switch (report_req.key_sel)
