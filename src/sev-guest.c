@@ -131,9 +131,8 @@ void handle_get_ext_report(int process_memfile_fd,
     /* Must read the cert file and copy to it */
     (*ext_report_req).certs_len = 1440;
     uint8 certs[1440];
-    memset(certs, 0x00, sizeof(certs));
-    int cert_fd;
 
+    int cert_fd;
     switch ((*report_req).key_sel) {
         case 0:
             cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
@@ -150,6 +149,10 @@ void handle_get_ext_report(int process_memfile_fd,
     }
 
     read(cert_fd, certs, sizeof(certs));
+
+    char output[1440];
+    ucharArrayToString(certs, 1440, output);
+    printf("%s\n", output);
 
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
 
