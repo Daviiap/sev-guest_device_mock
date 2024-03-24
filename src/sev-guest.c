@@ -129,8 +129,8 @@ void handle_get_ext_report(int process_memfile_fd,
     *report_req = (*ext_report_req).data;
 
     /* Must read the cert file and copy to it */
-    (*ext_report_req).certs_len = 1440;
-    uint8 certs[1440];
+    (*ext_report_req).certs_len = 2048;
+    uint8 certs[2048];
 
     int cert_fd;
     switch ((*report_req).key_sel) {
@@ -150,8 +150,8 @@ void handle_get_ext_report(int process_memfile_fd,
 
     read(cert_fd, certs, sizeof(certs));
 
-    char output[1440];
-    ucharArrayToString(certs, 1440, output);
+    char output[2048];
+    ucharArrayToString(certs, 2048, output);
     printf("%s\n", output);
 
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
