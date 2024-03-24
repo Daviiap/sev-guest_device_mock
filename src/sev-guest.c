@@ -150,10 +150,6 @@ void handle_get_ext_report(int process_memfile_fd,
 
     read(cert_fd, certs, sizeof(certs));
 
-    char output[1440];
-    ucharArrayToString(certs, 1440, output);
-    printf("%s\n", output);
-
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
 
     memcpy(&report.report_data, (*report_req).user_data,
