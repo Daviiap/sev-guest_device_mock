@@ -118,16 +118,6 @@ void handle_get_report(int process_memfile_fd,
     waitpid(pid, NULL, 0);
 }
 
-struct cert_table {
-    struct cert_table_entry {
-        uuid_t guid;
-        uint32_t offset;
-        uint32_t length;
-    } *entry;
-};
-
-const char vcek_guid[] = "63da758d-e664-4564-adc5-f4b93be8accd";
-
 void handle_get_ext_report(int process_memfile_fd,
                            struct snp_report_req *report_req,
                            struct snp_guest_request_ioctl *ioctl_request,
@@ -139,52 +129,9 @@ void handle_get_ext_report(int process_memfile_fd,
           (*ioctl_request).req_data);
     *report_req = (*ext_report_req).data;
 
-    int cert_fd;
-    switch ((*report_req).key_sel) {
-        case 0:
-            cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
-            if (cert_fd == -1) {
-                cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
-            }
-            break;
-        case 1:
-            cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
-            break;
-        case 2:
-            cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
-            break;
-    }
-
-    struct stat stat_buf;
-    if (fstat(cert_fd, &stat_buf) == -1) {
-        perror("fstat");
-    }
-
-    unsigned int certs_len = (unsigned int)stat_buf.st_size;
-
-    (*ext_report_req).certs_len = certs_len;
-    uint8 certs[certs_len];
-
-    read(cert_fd, certs, sizeof(certs));
-
-    // Allocate memory for a new cert_table_entry
-    struct cert_table_entry *new_entry =
-        (struct cert_table_entry *)malloc(sizeof(struct cert_table_entry));
-    if (new_entry == NULL) {
-        fprintf(stderr, "Error allocating memory for cert_table_entry\n");
-        return;
-    }
-
-    memset(&(new_entry->guid), 0, sizeof(uuid_t));
-    new_entry->offset = 0;
-    new_entry->length = certs_len;
-
-    struct cert_table table;
-    table.entry = new_entry;
-
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
 
-    memcpy(&report.report_data, (*report_req).user_data,
+    memcpy(report.report_data, (*report_req).user_data,
            sizeof((*report_req).user_data));
     report.vmpl = (*report_req).vmpl;
 
@@ -195,11 +142,6 @@ void handle_get_ext_report(int process_memfile_fd,
 
     pwrite(process_memfile_fd, report_resp_msg, sizeof(*report_resp_msg),
            (*ioctl_request).resp_data);
-    pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
-           (*ioctl_request).req_data);
-
-    pwrite(process_memfile_fd, &table, sizeof(table),
-           (*ext_report_req).certs_address);
 
     close(process_memfile_fd);
 
