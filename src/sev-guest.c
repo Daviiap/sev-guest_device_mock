@@ -78,24 +78,11 @@ static int sev_guest_process_arg(void *data, const char *arg, int key,
     }
 }
 
-void ucharArrayToString(const unsigned char *array, int length, char *output) {
-    int i;
-    for (i = 0; i < length; ++i) {
-        sprintf(output + i * 2, "%02X",
-                array[i]);  // Convert each byte to two hexadecimal characters
-    }
-    output[length * 2] = '\0';  // Null-terminate the string
-}
-
 void handle_get_report(int process_memfile_fd,
                        struct snp_report_req *report_req,
                        struct snp_guest_request_ioctl *ioctl_request,
                        struct msg_report_resp *report_resp_msg,
-                       struct snp_report_resp *report_resp, pid_t pid,
-                       fuse_req_t *req) {
-    pread(process_memfile_fd, report_req, sizeof(*report_req),
-          (*ioctl_request).req_data);
-
+                       struct snp_report_resp *report_resp) {
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
 
     memcpy(report.report_data, (*report_req).user_data,
@@ -109,13 +96,6 @@ void handle_get_report(int process_memfile_fd,
 
     pwrite(process_memfile_fd, report_resp_msg, sizeof(*report_resp_msg),
            (*ioctl_request).resp_data);
-
-    close(process_memfile_fd);
-
-    fuse_reply_ioctl(*req, 0, NULL, 0);
-
-    ptrace(PTRACE_DETACH, pid, 0, 0);
-    waitpid(pid, NULL, 0);
 }
 
 void handle_get_ext_report(int process_memfile_fd,
@@ -123,32 +103,9 @@ void handle_get_ext_report(int process_memfile_fd,
                            struct snp_guest_request_ioctl *ioctl_request,
                            struct msg_report_resp *report_resp_msg,
                            struct snp_ext_report_req *ext_report_req,
-                           struct snp_report_resp *report_resp, pid_t pid,
-                           fuse_req_t *req) {
-    pread(process_memfile_fd, ext_report_req, sizeof(ext_report_req),
-          (*ioctl_request).req_data);
-    *report_req = (*ext_report_req).data;
-
-    memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
-
-    memcpy(report.report_data, (*report_req).user_data,
-           sizeof((*report_req).user_data));
-    report.vmpl = (*report_req).vmpl;
-
-    sign_attestation_report(&report, (*report_req).key_sel);
-
-    memcpy(&(*report_resp_msg).report, &report, sizeof(report));
-    (*report_resp_msg).report_size = (int)sizeof(report);
-
-    pwrite(process_memfile_fd, report_resp_msg, sizeof(*report_resp_msg),
-           (*ioctl_request).resp_data);
-
-    close(process_memfile_fd);
-
-    fuse_reply_ioctl(*req, 0, NULL, 0);
-
-    ptrace(PTRACE_DETACH, pid, 0, 0);
-    waitpid(pid, NULL, 0);
+                           struct snp_report_resp *report_resp) {
+    handle_get_report(process_memfile_fd, report_req, ioctl_request, report_resp_msg,
+             report_resp);
 }
 
 void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
@@ -182,18 +139,31 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
     switch (cmd) {
         case SNP_GET_REPORT:
+            pread(process_memfile_fd, &report_req, sizeof(report_req),
+                  (ioctl_request).req_data);
             handle_get_report(process_memfile_fd, &report_req, &ioctl_request,
-                              &report_resp_msg, &report_resp, pid, &req);
+                              &report_resp_msg, &report_resp);
             break;
         case SNP_GET_EXT_REPORT:
+            pread(process_memfile_fd, &ext_report_req, sizeof(ext_report_req),
+                  (ioctl_request).req_data);
+            report_req = (ext_report_req).data;
             handle_get_ext_report(process_memfile_fd, &report_req,
                                   &ioctl_request, &report_resp_msg,
-                                  &ext_report_req, &report_resp, pid, &req);
+                                  &ext_report_req, &report_resp);
             break;
         default:
             close(process_memfile_fd);
             fuse_reply_err(req, EINVAL);
+            return;
     }
+
+    close(process_memfile_fd);
+
+    fuse_reply_ioctl(req, 0, NULL, 0);
+
+    ptrace(PTRACE_DETACH, pid, 0, 0);
+    waitpid(pid, NULL, 0);
 }
 
 static const struct cuse_lowlevel_ops sev_guest_clops = {
