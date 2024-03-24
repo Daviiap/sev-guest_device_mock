@@ -172,10 +172,8 @@ void handle_get_ext_report(int process_memfile_fd,
         (struct cert_table_entry *)malloc(sizeof(struct cert_table_entry));
     if (new_entry == NULL) {
         fprintf(stderr, "Error allocating memory for cert_table_entry\n");
-        free(certs);
         return;
     }
-
 
     memset(&(new_entry->guid), 0, sizeof(uuid_t));
     new_entry->offset = 0;
