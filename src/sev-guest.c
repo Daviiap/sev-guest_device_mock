@@ -184,8 +184,6 @@ void handle_get_ext_report(int process_memfile_fd,
     struct cert_table table;
     table.entry = new_entry;
 
-    free(certs);
-
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
 
     memcpy(&report.report_data, (*report_req).user_data,
