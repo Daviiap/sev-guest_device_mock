@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <uuid/uuid.h>
 
 #include "./sev_guest_ioctl.h"
 #include "snp/attestation.h"
@@ -117,6 +118,16 @@ void handle_get_report(int process_memfile_fd,
     waitpid(pid, NULL, 0);
 }
 
+struct cert_table {
+    struct cert_table_entry {
+        uuid_t guid;
+        uint32_t offset;
+        uint32_t length;
+    } *entry;
+};
+
+const char vcek_guid[] = "63da758d-e664-4564-adc5-f4b93be8accd";
+
 void handle_get_ext_report(int process_memfile_fd,
                            struct snp_report_req *report_req,
                            struct snp_guest_request_ioctl *ioctl_request,
@@ -149,14 +160,30 @@ void handle_get_ext_report(int process_memfile_fd,
         perror("fstat");
     }
 
-    unsigned int certs_len = (unsigned int) stat_buf.st_size;
-
-    printf("certs_len: %d", certs_len);
+    unsigned int certs_len = (unsigned int)stat_buf.st_size;
 
     (*ext_report_req).certs_len = certs_len;
     uint8 certs[certs_len];
-    
+
     read(cert_fd, certs, sizeof(certs));
+
+    // Allocate memory for a new cert_table_entry
+    struct cert_table_entry *new_entry =
+        (struct cert_table_entry *)malloc(sizeof(struct cert_table_entry));
+    if (new_entry == NULL) {
+        fprintf(stderr, "Error allocating memory for cert_table_entry\n");
+        free(certs);
+        return;
+    }
+
+    memset(&(new_entry->guid), vcek_guid, sizeof(uuid_t));
+    new_entry->offset = 0;
+    new_entry->length = certs_len;
+
+    struct cert_table table;
+    table.entry = new_entry;
+
+    free(certs);
 
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
 
