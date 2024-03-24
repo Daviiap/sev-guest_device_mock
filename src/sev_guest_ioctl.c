@@ -53,12 +53,15 @@ void generate_random_array(uint8* array, int length) {
     }
 }
 
+int is_vlek_present() { return access(PRIVATE_VLEK_PATH, F_OK) == 0; }
+
 EC_KEY* read_ek(int key_sel) {
     EC_KEY* eckey;
     switch (key_sel) {
         case KEY_SEL_DEFAULT:
-            eckey = read_ecdsa_key_from_file(PRIVATE_VLEK_PATH);
-            if (eckey == NULL) {
+            if (is_vlek_present()) {
+                eckey = read_ecdsa_key_from_file(PRIVATE_VLEK_PATH);
+            } else {
                 eckey = read_ecdsa_key_from_file(PRIVATE_VCEK_PATH);
             }
             break;
@@ -77,8 +80,6 @@ EC_KEY* read_ek(int key_sel) {
 
     return eckey;
 }
-
-int is_vlek_present() { return access(PRIVATE_VLEK_PATH, F_OK) == 0; }
 
 void sha384(unsigned char* data, unsigned int* hash_len,
             unsigned char hash[SHA384_DIGEST_LENGTH]) {

@@ -17,7 +17,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
 
 #include "./sev_guest_ioctl.h"
 #include "snp/attestation.h"
@@ -210,30 +209,6 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
     switch (cmd) {
         case SNP_GET_REPORT:
-            // pread(process_memfile_fd, &report_req, sizeof(report_req),
-            //       ioctl_request.req_data);
-
-            // memcpy(&report_resp_msg, &report_resp, sizeof(report_resp));
-
-            // memcpy(report.report_data, report_req.user_data,
-            //        sizeof(report_req.user_data));
-            // report.vmpl = report_req.vmpl;
-
-            // sign_attestation_report(&report, report_req.key_sel);
-
-            // memcpy(&report_resp_msg.report, &report, sizeof(report));
-            // report_resp_msg.report_size = (int)sizeof(report);
-
-            // pwrite(process_memfile_fd, &report_resp_msg,
-            // sizeof(report_resp_msg),
-            //        ioctl_request.resp_data);
-
-            // close(process_memfile_fd);
-
-            // fuse_reply_ioctl(req, 0, NULL, 0);
-
-            // ptrace(PTRACE_DETACH, pid, 0, 0);
-            // waitpid(pid, NULL, 0);
             handle_get_report(process_memfile_fd, &report_req, &ioctl_request,
                               &report_resp_msg, &report_resp, pid, &req);
             break;
