@@ -128,10 +128,6 @@ void handle_get_ext_report(int process_memfile_fd,
           (*ioctl_request).req_data);
     *report_req = (*ext_report_req).data;
 
-    /* Must read the cert file and copy to it */
-    (*ext_report_req).certs_len = 1440;
-    uint8 certs[1440];
-
     int cert_fd;
     switch ((*report_req).key_sel) {
         case 0:
@@ -148,6 +144,18 @@ void handle_get_ext_report(int process_memfile_fd,
             break;
     }
 
+    struct stat stat_buf;
+    if (fstat(cert_fd, &stat_buf) == -1) {
+        perror("fstat");
+    }
+
+    unsigned int certs_len = (unsigned int) stat_buf.st_size;
+
+    printf("certs_len: %d", certs_len);
+
+    (*ext_report_req).certs_len = certs_len;
+    uint8 certs[certs_len];
+    
     read(cert_fd, certs, sizeof(certs));
 
     memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
