@@ -118,7 +118,9 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     EC_KEY* eckey = read_ek(key_sel);
     if (key_sel == KEY_SEL_VLEK ||
         (key_sel == KEY_SEL_DEFAULT && is_vlek_present())) {
-        report->flags += 0b00000100;
+        report->flags |= 0b00000100;
+    } else {
+        report->flags &= 0b11111011;
     }
 
     unsigned char hash[SHA384_DIGEST_LENGTH];
