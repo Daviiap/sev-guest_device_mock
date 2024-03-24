@@ -80,9 +80,39 @@ EC_KEY* read_ek(int key_sel) {
 
 int is_vlek_present() { return access(PRIVATE_VLEK_PATH, F_OK) == 0; }
 
+void sha384(unsigned char* data, unsigned int* hash_len,
+            unsigned char hash[SHA384_DIGEST_LENGTH]) {
+    size_t data_len = offsetof(struct attestation_report, signature);
+
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        fprintf(stderr, "Error creating SHA-384 context\n");
+        return;
+    }
+
+    if (EVP_DigestInit_ex(mdctx, EVP_sha384(), NULL) != 1) {
+        fprintf(stderr, "Error initializing SHA-384 context\n");
+        EVP_MD_CTX_free(mdctx);
+        return;
+    }
+
+    if (EVP_DigestUpdate(mdctx, data, data_len) != 1) {
+        fprintf(stderr, "Error updating SHA-384 context\n");
+        EVP_MD_CTX_free(mdctx);
+        return;
+    }
+
+    if (EVP_DigestFinal_ex(mdctx, hash, hash_len) != 1) {
+        fprintf(stderr, "Error finalizing SHA-384 context\n");
+        EVP_MD_CTX_free(mdctx);
+        return;
+    }
+
+    EVP_MD_CTX_free(mdctx);
+}
+
 void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     unsigned char* data = (unsigned char*)report;
-    size_t data_len = offsetof(struct attestation_report, signature);
 
     EC_KEY* eckey = read_ek(key_sel);
     if (key_sel == KEY_SEL_VLEK ||
@@ -90,40 +120,13 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         report->flags += 0b00000100;
     }
 
-    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
-    if (mdctx == NULL) {
-        fprintf(stderr, "Error creating SHA-384 context\n");
-        EC_KEY_free(eckey);
-        return;
-    }
-
-    if (EVP_DigestInit_ex(mdctx, EVP_sha384(), NULL) != 1) {
-        fprintf(stderr, "Error initializing SHA-384 context\n");
-        EVP_MD_CTX_free(mdctx);
-        EC_KEY_free(eckey);
-        return;
-    }
-
-    if (EVP_DigestUpdate(mdctx, data, data_len) != 1) {
-        fprintf(stderr, "Error updating SHA-384 context\n");
-        EVP_MD_CTX_free(mdctx);
-        EC_KEY_free(eckey);
-        return;
-    }
-
     unsigned char hash[SHA384_DIGEST_LENGTH];
     unsigned int hash_len;
-    if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) {
-        fprintf(stderr, "Error finalizing SHA-384 context\n");
-        EVP_MD_CTX_free(mdctx);
-        EC_KEY_free(eckey);
-        return;
-    }
+    sha384(data, &hash_len, hash);
 
     ECDSA_SIG* ecdsa_signature = ECDSA_do_sign(hash, hash_len, eckey);
     if (ecdsa_signature == NULL) {
         fprintf(stderr, "Error creating ECDSA signature\n");
-        EVP_MD_CTX_free(mdctx);
         EC_KEY_free(eckey);
         return;
     }
@@ -136,7 +139,6 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     BN_bn2lebinpad(s_bn, report->signature.s, sizeof(report->signature.s));
 
     ECDSA_SIG_free(ecdsa_signature);
-    EVP_MD_CTX_free(mdctx);
     EC_KEY_free(eckey);
 }
 
@@ -151,7 +153,7 @@ void get_report(struct attestation_report* report, uint8 report_id[32]) {
         0x66, 0x29, 0x9A, 0x48, 0x0E, 0x52, 0x0A, 0xC9, 0xE2, 0x95, 0x5F, 0x70};
 
     uint8 chip_id[] = {
-        0x20, 0x02, 0x8D, 0x46, 0x36, 0xC2, 0x68, 0xB3, 0xBD, 0x52, 0x5B,
+        0x20, 0x02, 0x87, 0x46, 0x36, 0xC2, 0x68, 0xB3, 0xBD, 0x52, 0x5B,
         0x42, 0x9D, 0x33, 0x3C, 0x28, 0x27, 0x3C, 0xFC, 0xB6, 0x38, 0x74,
         0xF8, 0xCF, 0xF7, 0x8F, 0xA6, 0x13, 0x88, 0x70, 0x02, 0x99, 0x0E,
         0xFE, 0xC7, 0x0C, 0x4C, 0x53, 0x8B, 0xAC, 0x5E, 0x08, 0x43, 0x71,
