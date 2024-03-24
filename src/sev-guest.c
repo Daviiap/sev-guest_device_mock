@@ -176,7 +176,8 @@ void handle_get_ext_report(int process_memfile_fd,
         return;
     }
 
-    memset(&(new_entry->guid), vcek_guid, sizeof(uuid_t));
+
+    memset(&(new_entry->guid), 0, sizeof(uuid_t));
     new_entry->offset = 0;
     new_entry->length = certs_len;
 
@@ -201,7 +202,7 @@ void handle_get_ext_report(int process_memfile_fd,
     pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
            (*ioctl_request).req_data);
 
-    pwrite(process_memfile_fd, certs, sizeof(certs),
+    pwrite(process_memfile_fd, &table, sizeof(table),
            (*ext_report_req).certs_address);
 
     close(process_memfile_fd);
