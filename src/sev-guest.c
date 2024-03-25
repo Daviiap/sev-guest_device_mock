@@ -104,8 +104,40 @@ void handle_get_ext_report(int process_memfile_fd,
                            struct msg_report_resp *report_resp_msg,
                            struct snp_ext_report_req *ext_report_req,
                            struct snp_report_resp *report_resp) {
-    handle_get_report(process_memfile_fd, report_req, ioctl_request, report_resp_msg,
-             report_resp);
+    int cert_fd;
+    switch ((*report_req).key_sel) {
+        case 0:
+            cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
+            if (cert_fd == -1) {
+                cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
+            }
+            break;
+        case 1:
+            cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
+            break;
+        case 2:
+            cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
+            break;
+    }
+    struct stat stat_buf;
+    if (fstat(cert_fd, &stat_buf) == -1) {
+        perror("fstat");
+    }
+
+    __u32 certs_len = (__u32)stat_buf.st_size;
+    (*ext_report_req).certs_len = certs_len;
+    uint8 certs[(int)certs_len];
+
+    read(cert_fd, certs, sizeof(certs));
+
+    pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
+           (*ioctl_request).req_data);
+
+    pwrite(process_memfile_fd, certs, sizeof(certs),
+           ext_report_req->certs_address);
+
+    handle_get_report(process_memfile_fd, report_req, ioctl_request,
+                      report_resp_msg, report_resp);
 }
 
 void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
@@ -128,7 +160,6 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     char file[64];
 
     sprintf(file, "/proc/%ld/mem", (long)pid);
-
     int process_memfile_fd = open(file, O_RDWR);
 
     ptrace(PTRACE_SEIZE, pid, 0, 0);
