@@ -1,6 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -D_FILE_OFFSET_BITS=64 `pkg-config fuse --cflags`
 LDFLAGS = `pkg-config fuse --libs`
+UUID_LDFLAGS    := -luuid
 
 TARGET = bin/sev-guest
 SRC_DIR = src
@@ -17,7 +18,7 @@ create_directories:
 	mkdir -p bin
 
 $(TARGET): $(OBJECTS)
-	$(CC) $(CFLAGS) $^ -o $@ -lssl -lcrypto $(LDFLAGS)
+	$(CC) $(CFLAGS) $^ -o $@ -lssl -lcrypto $(LDFLAGS) $(UUID_LDFLAGS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@

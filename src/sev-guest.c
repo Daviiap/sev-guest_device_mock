@@ -21,6 +21,7 @@
 
 #include "./sev_guest_ioctl.h"
 #include "snp/attestation.h"
+#include "snp/cert-table.h"
 
 char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
 char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
@@ -124,17 +125,37 @@ void handle_get_ext_report(int process_memfile_fd,
         perror("fstat");
     }
 
-    __u32 certs_len = (__u32)stat_buf.st_size;
-    (*ext_report_req).certs_len = certs_len;
+    uint32 certs_len = (uint32)stat_buf.st_size;
     uint8 certs[(int)certs_len];
 
     read(cert_fd, certs, sizeof(certs));
 
+    struct cert_table table;
+
+    cert_table_alloc(&table, 1);
+    cert_table_add_entry(&table, vcek_guid, certs_len);
+
+    size_t table_size = cert_table_get_size(&table);
+    size_t total_size = table_size + certs_len;
+    uint8 *buffer = calloc(sizeof(uint8), total_size);
+    memset(buffer, 0x00, total_size);
+    memcpy(buffer, &table.entry[0], sizeof(struct cert_table_entry));
+
+    cert_table_append_cert(&table, buffer, total_size, vcek_guid, certs,
+                           certs_len);
+
+    size_t page_size = sysconf(_SC_PAGESIZE);
+    (*ext_report_req).certs_len = page_size * 1;
+
     pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
            (*ioctl_request).req_data);
 
-    pwrite(process_memfile_fd, certs, sizeof(certs),
+
+    pwrite(process_memfile_fd, buffer, total_size,
            ext_report_req->certs_address);
+
+    cert_table_free(&table);
+    free(buffer);
 
     handle_get_report(process_memfile_fd, report_req, ioctl_request,
                       report_resp_msg, report_resp);
