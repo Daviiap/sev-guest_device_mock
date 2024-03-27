@@ -9,6 +9,8 @@ Currently, the following request is implemented in this mock `sev-guest` chardev
 
 - **GET_REPORT**: This request retrieves a report containing information about the AMD Secure Processor and the Guest VM. The implementation provides a mock report for testing purposes.
 
+- **GET_EXT_REPORT**: This request retrieves a report containing information about the AMD Secure Processor and the Guest VM and the Certificate used to sign this report.
+
 ## Build Instructions
 
 To build the code, follow these steps:
@@ -75,7 +77,5 @@ This command will remove the object files and the sev-guest binary from the bin 
 
 ## Future work
 
-* Refactor the code;
 * Use a configuration file to define the report fields;
 * Enhance error handling;
-* Allow extended attestation report requests;
