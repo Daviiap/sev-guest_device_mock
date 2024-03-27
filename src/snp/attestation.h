@@ -1,7 +1,6 @@
 #ifndef ATTESTATION_H
 #define ATTESTATION_H
 
-
 #define SIG_ALGO_ECDSA_P384_SHA384 0x1
 
 typedef unsigned char uint8;

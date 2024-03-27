@@ -1,5 +1,7 @@
 #!/bin/bash
 
+sudo apt install -y build-essential libfuse-dev libssl-dev pkg-config
+
 KEYS_GEN_DIR="keys_gen"
 TARGET_DIR="/etc/sev-guest"
 CERT_CHAIN_FILE="cert_chain.pem"
