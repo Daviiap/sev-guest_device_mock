@@ -8,10 +8,8 @@ typedef unsigned short int uint16;
 typedef unsigned int uint32;
 typedef unsigned long int uint64;
 
-union tcb_version
-{
-    struct
-    {
+union tcb_version {
+    struct {
         uint8 boot_loader;
         uint8 tee;
         uint8 reserved[4];
@@ -21,15 +19,13 @@ union tcb_version
     uint64 raw;
 };
 
-struct signature
-{
+struct signature {
     uint8 r[72];
     uint8 s[72];
     uint8 reserved[512 - 144];
 };
 
-struct attestation_report
-{
+struct attestation_report {
     uint32 version;
     uint32 guest_svn;
     uint64 policy;
