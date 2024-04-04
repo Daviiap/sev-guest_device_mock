@@ -144,7 +144,8 @@ void handle_get_ext_report(int process_memfile_fd,
     cert_table_append_cert(&table, buffer, total_size, vcek_guid, certs,
                            certs_len);
 
-    (*ext_report_req).certs_len = total_size;
+    int page_size = sysconf(_SC_PAGESIZE);
+    (*ext_report_req).certs_len = page_size;
 
     pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
            (*ioctl_request).req_data);
