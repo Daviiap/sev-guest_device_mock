@@ -222,7 +222,7 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
     .ioctl = sev_guest_ioctl,
 };
 
-int main(int argc, char **argv) {
+int initDevice(int argc, char **argv) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct sev_guest_param param = {0, 0, 0};
     char dev_name[18] = "DEVNAME=sev-guest";
