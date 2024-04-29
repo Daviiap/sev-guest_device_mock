@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo apt install -y build-essential libfuse-dev libssl-dev pkg-config
+sudo apt install -y build-essential libfuse-dev libssl-dev pkg-config uuid-dev
 
 KEYS_GEN_DIR="keys_gen"
 TARGET_DIR="/etc/sev-guest"
