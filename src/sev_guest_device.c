@@ -1,7 +1,5 @@
 #define FUSE_USE_VERSION 31
 
-#include "snp/sev-guest.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse/cuse_lowlevel.h>
@@ -22,12 +20,13 @@
 #include "./sev_guest_ioctl.h"
 #include "snp/attestation.h"
 #include "snp/cert-table.h"
+#include "snp/sev-guest.h"
 
 char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
 char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
 
 static const char *usage =
-    "usage: cusexmp [options]\n"
+    "usage: sev-guest [options]\n"
     "\n"
     "options:\n"
     "    --help|-h             print this help message\n"
@@ -95,8 +94,12 @@ void handle_get_report(int process_memfile_fd,
     memcpy(&(*report_resp_msg).report, &report, sizeof(report));
     (*report_resp_msg).report_size = (int)sizeof(report);
 
-    pwrite(process_memfile_fd, report_resp_msg, sizeof(*report_resp_msg),
-           (*ioctl_request).resp_data);
+    int ret = pwrite(process_memfile_fd, report_resp_msg,
+                     sizeof(*report_resp_msg), (*ioctl_request).resp_data);
+
+    if (ret == -1) {
+        exit(EXIT_FAILURE);
+    }
 }
 
 void handle_get_ext_report(int process_memfile_fd,
@@ -128,7 +131,10 @@ void handle_get_ext_report(int process_memfile_fd,
     uint32 certs_len = (uint32)stat_buf.st_size;
     uint8 certs[(int)certs_len];
 
-    read(cert_fd, certs, sizeof(certs));
+    int ret = read(cert_fd, certs, sizeof(certs));
+    if (ret == -1) {
+        exit(EXIT_FAILURE);
+    }
 
     struct cert_table table;
 
@@ -147,11 +153,19 @@ void handle_get_ext_report(int process_memfile_fd,
     int page_size = sysconf(_SC_PAGESIZE);
     (*ext_report_req).certs_len = page_size;
 
-    pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
-           (*ioctl_request).req_data);
+    ret = pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
+                 (*ioctl_request).req_data);
 
-    pwrite(process_memfile_fd, buffer, total_size,
-           ext_report_req->certs_address);
+    if (ret == -1) {
+        exit(EXIT_FAILURE);
+    }
+
+    ret = pwrite(process_memfile_fd, buffer, total_size,
+                 ext_report_req->certs_address);
+
+    if (ret == -1) {
+        exit(EXIT_FAILURE);
+    }
 
     cert_table_free(&table);
     free(buffer);
@@ -184,20 +198,32 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
     ptrace(PTRACE_SEIZE, pid, 0, 0);
 
-    pread(process_memfile_fd, &ioctl_request, sizeof(ioctl_request), addr);
-    pread(process_memfile_fd, &report_resp, sizeof(report_resp),
-          ioctl_request.resp_data);
-
+    int ret =
+        pread(process_memfile_fd, &ioctl_request, sizeof(ioctl_request), addr);
+    if (ret == -1) {
+        exit(EXIT_FAILURE);
+    }
+    ret = pread(process_memfile_fd, &report_resp, sizeof(report_resp),
+                ioctl_request.resp_data);
+    if (ret == -1) {
+        exit(EXIT_FAILURE);
+    }
     switch (cmd) {
         case SNP_GET_REPORT:
-            pread(process_memfile_fd, &report_req, sizeof(report_req),
-                  (ioctl_request).req_data);
+            ret = pread(process_memfile_fd, &report_req, sizeof(report_req),
+                        (ioctl_request).req_data);
+            if (ret == -1) {
+                exit(EXIT_FAILURE);
+            }
             handle_get_report(process_memfile_fd, &report_req, &ioctl_request,
                               &report_resp_msg, &report_resp);
             break;
         case SNP_GET_EXT_REPORT:
-            pread(process_memfile_fd, &ext_report_req, sizeof(ext_report_req),
-                  (ioctl_request).req_data);
+            ret = pread(process_memfile_fd, &ext_report_req,
+                        sizeof(ext_report_req), (ioctl_request).req_data);
+            if (ret == -1) {
+                exit(EXIT_FAILURE);
+            }
             report_req = (ext_report_req).data;
             handle_get_ext_report(process_memfile_fd, &report_req,
                                   &ioctl_request, &report_resp_msg,
