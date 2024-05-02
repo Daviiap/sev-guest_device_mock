@@ -26,7 +26,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 	}
 
 	caTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber: big.NewInt(65536),
 		Subject: pkix.Name{
 			OrganizationalUnit: []string{"Engineering"},
 			Country:            []string{"US"},
@@ -46,6 +46,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(100, 0, 0),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		SignatureAlgorithm:    x509.SHA384WithRSAPSS,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
@@ -56,30 +57,13 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 		return nil, nil
 	}
 
-	caKeyFile, err := os.Create("./keys/ark.key")
+	cert, err := x509.ParseCertificate(caCertificate)
 	if err != nil {
-		fmt.Printf("Failed to create CA private key file: %v", err)
-		return nil, nil
-	}
-	defer caKeyFile.Close()
-	if err := pem.Encode(caKeyFile, &pem.Block{Type: "PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(caPrivateKey)}); err != nil {
-		fmt.Printf("Failed to write CA private key to file: %v", err)
+		fmt.Printf("Failed to generate CA certificate: %v", err)
 		return nil, nil
 	}
 
-	caCertFile, err := os.Create("./keys/ark.crt")
-	if err != nil {
-		fmt.Printf("Failed to create CA certificate file: %v", err)
-		return nil, nil
-	}
-	defer caCertFile.Close()
-	if err := pem.Encode(caCertFile, &pem.Block{Type: "CERTIFICATE", Bytes: caCertificate}); err != nil {
-		fmt.Printf("Failed to write CA certificate to file: %v", err)
-		return nil, nil
-	}
-
-	fmt.Println("Self-signed CA certificate and private key generated successfully.")
-	return caTemplate, caPrivateKey
+	return cert, caPrivateKey
 }
 
 func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
@@ -90,7 +74,8 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x
 	}
 
 	askTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber:       big.NewInt(65793),
+		SignatureAlgorithm: x509.SHA384WithRSAPSS,
 		Subject: pkix.Name{
 			OrganizationalUnit: []string{"Engineering"},
 			Country:            []string{"US"},
@@ -120,37 +105,20 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x
 		return nil, nil
 	}
 
-	askKeyFile, err := os.Create("./keys/ask.key")
+	cert, err := x509.ParseCertificate(askCertificate)
 	if err != nil {
-		fmt.Printf("Failed to create ask CA private key file: %v", err)
-		return nil, nil
-	}
-	defer askKeyFile.Close()
-	if err := pem.Encode(askKeyFile, &pem.Block{Type: "PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(askPrivateKey)}); err != nil {
-		fmt.Printf("Failed to write ask CA private key to file: %v", err)
+		fmt.Printf("Failed to generate ask CA certificate: %v", err)
 		return nil, nil
 	}
 
-	askCertFile, err := os.Create("./keys/ask.crt")
-	if err != nil {
-		fmt.Printf("Failed to create ask CA certificate file: %v", err)
-		return nil, nil
-	}
-	defer askCertFile.Close()
-	if err := pem.Encode(askCertFile, &pem.Block{Type: "CERTIFICATE", Bytes: askCertificate}); err != nil {
-		fmt.Printf("Failed to write ask CA certificate to file: %v", err)
-		return nil, nil
-	}
-
-	fmt.Println("Intermediate CA certificate and private key generated successfully.")
-	return askTemplate, askPrivateKey
+	return cert, askPrivateKey
 }
 
-func generateChipKey(name string, askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey) {
+func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
 	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		fmt.Printf("Failed to generate ECDSA key pair: %v", err)
-		return
+		return nil, nil
 	}
 
 	template := &x509.Certificate{
@@ -173,60 +141,98 @@ func generateChipKey(name string, askCert *x509.Certificate, askPrivateKey *rsa.
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, askCert, key.Public(), askPrivateKey)
 	if err != nil {
 		fmt.Printf("Failed to generate certificate: %v", err)
-		return
+		return nil, nil
 	}
 
-	keyFile, err := os.Create("./keys/" + name + ".key")
+	cert, err := x509.ParseCertificate(certBytes)
 	if err != nil {
-		fmt.Printf("Failed to create private key file: %v", err)
-		return
-	}
-	defer keyFile.Close()
-	keyMarshaled, _ := x509.MarshalECPrivateKey(key)
-	if err := pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyMarshaled}); err != nil {
-		fmt.Printf("Failed to write private key to file: %v", err)
-		return
+		fmt.Printf("Failed to generate certificate: %v", err)
+		return nil, nil
 	}
 
-	certFile, err := os.Create("./keys/" + name + ".crt")
-	if err != nil {
-		fmt.Printf("Failed to create certificate file: %v", err)
-		return
-	}
-	defer certFile.Close()
-	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certBytes}); err != nil {
-		fmt.Printf("Failed to write certificate to file: %v", err)
-		return
-	}
-
-	fmt.Println("ECDSA key pair and certificate generated successfully.")
+	return cert, key
 }
 
-func buildCertChain(cert1File, cert2File, outputFile string) error {
-	cert1Bytes, err := os.ReadFile(cert1File)
-	if err != nil {
-		return err
+func generateCRL(askCert *x509.Certificate, askKey *rsa.PrivateKey) *x509.RevocationList {
+	crlTemplate := x509.RevocationList{
+		Number:             big.NewInt(4),
+		SignatureAlgorithm: x509.SHA384WithRSAPSS,
+		Issuer:             askCert.Issuer,
+		RawIssuer:          askCert.RawIssuer,
+		AuthorityKeyId:     askCert.AuthorityKeyId,
+		NextUpdate:         time.Now().Add(1000 * 24 * time.Hour),
 	}
 
-	cert2Bytes, err := os.ReadFile(cert2File)
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &crlTemplate, askCert, askKey)
 	if err != nil {
-		return err
+		return nil
 	}
 
-	cert1Block, _ := pem.Decode(cert1Bytes)
-	cert2Block, _ := pem.Decode(cert2Bytes)
-
-	cert1, err := x509.ParseCertificate(cert1Block.Bytes)
+	crl, err := x509.ParseRevocationList(crlDER)
 	if err != nil {
-		return err
+		return nil
 	}
 
-	cert2, err := x509.ParseCertificate(cert2Block.Bytes)
-	if err != nil {
-		return err
+	return crl
+}
+
+func buildCertChain(arkCert, askCert *x509.Certificate) *x509.CertPool {
+	certChain := x509.NewCertPool()
+	certChain.AddCert(arkCert)
+	certChain.AddCert(askCert)
+
+	return certChain
+}
+
+func validateEKSignature(cert *x509.Certificate, certChain *x509.CertPool) bool {
+	opts := x509.VerifyOptions{
+		Roots: certChain,
 	}
 
-	certChain := []*x509.Certificate{cert1, cert2}
+	_, err := cert.Verify(opts)
+
+	return err == nil
+}
+
+func validateCRLSignature(crl *x509.RevocationList, parent *x509.Certificate) bool {
+	return crl.CheckSignatureFrom(parent) == nil
+}
+
+func store(path, keyType string, bytes []byte) {
+	pemBlock := &pem.Block{
+		Type:  keyType,
+		Bytes: bytes,
+	}
+
+	pemData := pem.EncodeToMemory(pemBlock)
+	os.WriteFile(path, pemData, 0644)
+}
+
+func generateKeys(arkCert *x509.Certificate, arkKey *rsa.PrivateKey, ekType string) {
+	askCert, askKey := generateASK(arkCert, arkKey)
+	askCRL := generateCRL(askCert, askKey)
+
+	cert_chain := buildCertChain(arkCert, askCert)
+
+	ekCert, ekKey := generateChipKey(askCert, askKey)
+
+	valid := validateCRLSignature(askCRL, askCert)
+	if !valid {
+		panic("Error generating CRL")
+	}
+	valid = validateEKSignature(ekCert, cert_chain)
+	if !valid {
+		panic("Error generating EK")
+	}
+
+	os.Mkdir("./keys/"+ekType, 0777)
+
+	store("./keys/"+ekType+"/ask.pem", "CERTIFICATE", askCert.Raw)
+	store("./keys/"+ekType+"/ask.key", "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(askKey))
+
+	os.WriteFile("./keys/"+ekType+"/crl.der", askCRL.Raw, 0644)
+
+	certChain := []*x509.Certificate{arkCert, askCert}
 
 	chainPEM := []byte{}
 	for _, cert := range certChain {
@@ -236,60 +242,18 @@ func buildCertChain(cert1File, cert2File, outputFile string) error {
 		})...)
 	}
 
-	err = os.WriteFile(outputFile, chainPEM, 0644)
-	if err != nil {
-		return err
-	}
+	os.WriteFile("./keys/"+ekType+"/cert_chain.pem", chainPEM, 0644)
 
-	return nil
-}
-
-func validateCertChain(vcekPath string, rootPath string) (bool, error) {
-	vcekBin, err := os.ReadFile(vcekPath)
-	if err != nil {
-		return false, err
-	}
-
-	rootPEM, err := os.ReadFile(rootPath)
-	if err != nil {
-		return false, err
-	}
-
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM([]byte(rootPEM))
-	if !ok {
-		return false, err
-	}
-
-	block, _ := pem.Decode([]byte(vcekBin))
-	if block == nil {
-		return false, err
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return false, err
-	}
-
-	opts := x509.VerifyOptions{
-		Roots:         roots,
-		Intermediates: x509.NewCertPool(),
-	}
-
-	if _, err := cert.Verify(opts); err != nil {
-		return false, err
-	}
-
-	return true, nil
+	store("./keys/"+ekType+"/ek.pem", "CERTIFICATE", arkCert.Raw)
+	ekKeyBytes, _ := x509.MarshalECPrivateKey(ekKey)
+	store("./keys/"+ekType+"/ek.key", "EC PRIVATE KEY", ekKeyBytes)
 }
 
 func main() {
 	arkCert, arkKey := generateARK()
-	askCert, askPrivateKey := generateASK(arkCert, arkKey)
-	buildCertChain("./keys/ark.crt", "./keys/ask.crt", "./keys/cert_chain.pem")
-	generateChipKey("vcek", askCert, askPrivateKey)
-	generateChipKey("vlek", askCert, askPrivateKey)
-	valid, _ := validateCertChain("./keys/vcek.crt", "./keys/cert_chain.pem")
-	fmt.Println("VCEK valid: ", valid)
-	valid, _ = validateCertChain("./keys/vlek.crt", "./keys/cert_chain.pem")
-	fmt.Println("VLEK valid: ", valid)
+	store("./keys/ark.pem", "CERTIFICATE", arkCert.Raw)
+	store("./keys/ark.key", "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(arkKey))
+
+	generateKeys(arkCert, arkKey, "vcek")
+	generateKeys(arkCert, arkKey, "vlek")
 }
