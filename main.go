@@ -1,10 +1,15 @@
 package main
 
 import (
+	"fmt"
+
 	sevguest "github.com/Daviiap/sev-guest_device_mock/src"
 )
 
 func main() {
 	device_mock := sevguest.Device{}
-	device_mock.Start()
+	go device_mock.Start()
+	fmt.Println("Device /dev/sev-guest running.")
+	for {
+	}
 }
