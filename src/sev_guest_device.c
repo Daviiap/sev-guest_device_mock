@@ -21,9 +21,7 @@
 #include "snp/attestation.h"
 #include "snp/cert-table.h"
 #include "snp/sev-guest.h"
-
-char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
-char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
+#include "handlers.h"
 
 static const char *usage =
     "usage: sev-guest [options]\n"
@@ -77,103 +75,7 @@ static int sev_guest_process_arg(void *data, const char *arg, int key,
             return 1;
     }
 }
-
-void handle_get_report(int process_memfile_fd,
-                       struct snp_report_req *report_req,
-                       struct snp_guest_request_ioctl *ioctl_request,
-                       struct msg_report_resp *report_resp_msg,
-                       struct snp_report_resp *report_resp) {
-    memcpy(report_resp_msg, report_resp, sizeof(*report_resp));
-
-    memcpy(report.report_data, (*report_req).user_data,
-           sizeof((*report_req).user_data));
-    report.vmpl = (*report_req).vmpl;
-
-    sign_attestation_report(&report, (*report_req).key_sel);
-
-    memcpy(&(*report_resp_msg).report, &report, sizeof(report));
-    (*report_resp_msg).report_size = (int)sizeof(report);
-
-    int ret = pwrite(process_memfile_fd, report_resp_msg,
-                     sizeof(*report_resp_msg), (*ioctl_request).resp_data);
-
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
-}
-
-void handle_get_ext_report(int process_memfile_fd,
-                           struct snp_report_req *report_req,
-                           struct snp_guest_request_ioctl *ioctl_request,
-                           struct msg_report_resp *report_resp_msg,
-                           struct snp_ext_report_req *ext_report_req,
-                           struct snp_report_resp *report_resp) {
-    int cert_fd;
-    switch ((*report_req).key_sel) {
-        case 0:
-            cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
-            if (cert_fd == -1) {
-                cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
-            }
-            break;
-        case 1:
-            cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
-            break;
-        case 2:
-            cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
-            break;
-    }
-    struct stat stat_buf;
-    if (fstat(cert_fd, &stat_buf) == -1) {
-        perror("fstat");
-    }
-
-    uint32 certs_len = (uint32)stat_buf.st_size;
-    uint8 certs[(int)certs_len];
-
-    int ret = read(cert_fd, certs, sizeof(certs));
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
-
-    struct cert_table table;
-
-    cert_table_alloc(&table, 1);
-    cert_table_add_entry(&table, vcek_guid, certs_len);
-
-    size_t table_size = cert_table_get_size(&table);
-    size_t total_size = table_size + certs_len;
-    uint8 *buffer = calloc(sizeof(uint8), total_size);
-    memset(buffer, 0x00, total_size);
-    memcpy(buffer, &table.entry[0], sizeof(struct cert_table_entry));
-
-    cert_table_append_cert(&table, buffer, total_size, vcek_guid, certs,
-                           certs_len);
-
-    int page_size = sysconf(_SC_PAGESIZE);
-    (*ext_report_req).certs_len = page_size;
-
-    ret = pwrite(process_memfile_fd, ext_report_req, sizeof(*ext_report_req),
-                 (*ioctl_request).req_data);
-
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
-
-    ret = pwrite(process_memfile_fd, buffer, total_size,
-                 ext_report_req->certs_address);
-
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
-
-    cert_table_free(&table);
-    free(buffer);
-
-    handle_get_report(process_memfile_fd, report_req, ioctl_request,
-                      report_resp_msg, report_resp);
-}
-
+    
 void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
                      struct fuse_file_info *fi, unsigned flags,
                      const void *in_buf, size_t in_bufsz, size_t out_bufsz) {
@@ -216,7 +118,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
                 exit(EXIT_FAILURE);
             }
             handle_get_report(process_memfile_fd, &report_req, &ioctl_request,
-                              &report_resp_msg, &report_resp);
+                              &report_resp_msg, &report_resp, &report);
             break;
         case SNP_GET_EXT_REPORT:
             ret = pread(process_memfile_fd, &ext_report_req,
@@ -227,7 +129,7 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
             report_req = (ext_report_req).data;
             handle_get_ext_report(process_memfile_fd, &report_req,
                                   &ioctl_request, &report_resp_msg,
-                                  &ext_report_req, &report_resp);
+                                  &ext_report_req, &report_resp, &report);
             break;
         default:
             close(process_memfile_fd);
@@ -248,7 +150,36 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
     .ioctl = sev_guest_ioctl,
 };
 
-int initDevice(int argc, char **argv) {
+int initDevice() {
+    int argc = 2;
+    char *argv[] = {"sev-guest", "-f"};
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    struct sev_guest_param param = {0, 0, 0};
+    char dev_name[18] = "DEVNAME=sev-guest";
+    const char *dev_info_argv[] = {dev_name};
+    struct cuse_info dev_info;
+    int ret = 1;
+
+    if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
+        printf("failed to parse option\n");
+        fuse_opt_free_args(&args);
+        return ret;
+    }
+
+    get_report(&report);
+
+    memset(&dev_info, 0x00, sizeof(dev_info));
+    dev_info.dev_major = param.major;
+    dev_info.dev_minor = param.minor;
+    dev_info.dev_info_argc = 1;
+    dev_info.dev_info_argv = dev_info_argv;
+    dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
+
+    return cuse_lowlevel_main(args.argc, args.argv, &dev_info, &sev_guest_clops,
+                              NULL);
+}
+
+int main(int argc, char **argv) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct sev_guest_param param = {0, 0, 0};
     char dev_name[18] = "DEVNAME=sev-guest";
