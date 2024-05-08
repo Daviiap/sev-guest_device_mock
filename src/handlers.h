@@ -1,6 +1,9 @@
 #ifndef __HANDLERS_H__
 #define __HANDLERS_H__
 
+#include "snp/attestation.h"
+#include "snp/sev-guest.h"
+
 void handle_get_ext_report(int process_memfile_fd,
                            struct snp_report_req *report_req,
                            struct snp_guest_request_ioctl *ioctl_request,

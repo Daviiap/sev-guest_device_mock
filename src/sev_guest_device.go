@@ -17,3 +17,7 @@ type Device struct{}
 func (*Device) Start() {
 	C.initDevice()
 }
+
+func (*Device) Stop() {
+	C.stopDevice()
+}

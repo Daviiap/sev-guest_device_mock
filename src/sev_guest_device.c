@@ -18,10 +18,10 @@
 #include <uuid/uuid.h>
 
 #include "./sev_guest_ioctl.h"
+#include "handlers.h"
 #include "snp/attestation.h"
 #include "snp/cert-table.h"
 #include "snp/sev-guest.h"
-#include "handlers.h"
 
 static const char *usage =
     "usage: sev-guest [options]\n"
@@ -39,6 +39,7 @@ static const char *usage =
     { t, offsetof(struct sev_guest_param, p), 1 }
 
 static struct attestation_report report;
+static struct fuse_session *se;
 
 static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi) {
     fuse_reply_open(req, fi);
@@ -75,7 +76,7 @@ static int sev_guest_process_arg(void *data, const char *arg, int key,
             return 1;
     }
 }
-    
+
 void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
                      struct fuse_file_info *fi, unsigned flags,
                      const void *in_buf, size_t in_bufsz, size_t out_bufsz) {
@@ -175,8 +176,32 @@ int initDevice() {
     dev_info.dev_info_argv = dev_info_argv;
     dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
 
-    return cuse_lowlevel_main(args.argc, args.argv, &dev_info, &sev_guest_clops,
-                              NULL);
+    int multithreaded;
+    int res;
+
+    se = cuse_lowlevel_setup(argc, argv, &dev_info, &sev_guest_clops,
+                             &multithreaded, NULL);
+    if (se == NULL) {
+        return 1;
+    }
+
+    if (multithreaded) {
+        res = fuse_session_loop_mt(se);
+    } else {
+        res = fuse_session_loop(se);
+    }
+
+    cuse_lowlevel_teardown(se);
+    if (res == -1) {
+        return 1;
+    }
+
+    return 0;
+}
+
+void stopDevice() { 
+    cuse_lowlevel_teardown(se);
+    unlink("/dev/sev-guest");
 }
 
 int main(int argc, char **argv) {

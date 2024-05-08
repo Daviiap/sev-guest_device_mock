@@ -1,3 +1,5 @@
+#include "handlers.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse/cuse_lowlevel.h>
@@ -19,7 +21,6 @@
 #include "snp/attestation.h"
 #include "snp/cert-table.h"
 #include "snp/sev-guest.h"
-#include "handlers.h"
 
 char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
 char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
@@ -109,12 +110,17 @@ void handle_get_ext_report(int process_memfile_fd,
     }
 
     /*
-        Must not verify error on this `pwrite` call because of the extended report flow.
-        It makes the first request just to get the certs size, so the `ext_report_req->certs_address`
-        will point to a invalid memory address and will result on error on `pwrite` call.
+        Do not return error on this pwrite call due to the extended report
+       flow. The initial request is made solely to determine the size of the
+       certificates. Consequently, ext_report_req->certs_address will point to
+       an invalid memory address, resulting in an error on the pwrite call.
     */
-    pwrite(process_memfile_fd, buffer, total_size,
+    ret = pwrite(process_memfile_fd, buffer, total_size,
                  ext_report_req->certs_address);
+
+    if (ret == -1) {
+        printf("[warning] certs write error.\n");
+    }
 
     cert_table_free(&table);
     free(buffer);
