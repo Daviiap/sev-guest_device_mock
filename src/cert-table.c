@@ -10,6 +10,7 @@
 #include <uuid/uuid.h>
 
 const char vcek_guid[] = "63da758d-e664-4564-adc5-f4b93be8accd";
+const char vlek_guid[] = "a8074bc2-a25a-483e-aae6-39c045a0b8a1";
 const char ask_guid[] = "4ab7b379-bbac-4fe4-a02f-05aef327c782";
 const char ark_guid[] = "c0b406a4-a803-4952-9743-3fb6014cd0ae";
 

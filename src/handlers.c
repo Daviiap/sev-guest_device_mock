@@ -46,18 +46,23 @@ void handle_get_ext_report(int process_memfile_fd,
                            struct snp_report_resp *report_resp,
                            struct attestation_report *report) {
     int cert_fd;
+    char ek_guid[37];
     switch (report_req->key_sel) {
         case 0:
             cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
+            memcpy(ek_guid, vlek_guid, sizeof(ek_guid));
             if (cert_fd == -1) {
                 cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
+                memcpy(ek_guid, vcek_guid, sizeof(ek_guid));
             }
             break;
         case 1:
             cert_fd = open(PUBLIC_VCEK_PATH, O_RDWR);
+            memcpy(ek_guid, vcek_guid, sizeof(ek_guid));
             break;
         case 2:
             cert_fd = open(PUBLIC_VLEK_PATH, O_RDWR);
+            memcpy(ek_guid, vlek_guid, sizeof(ek_guid));
             break;
     }
     struct stat stat_buf;
@@ -76,7 +81,7 @@ void handle_get_ext_report(int process_memfile_fd,
     struct cert_table table;
 
     cert_table_alloc(&table, 1);
-    cert_table_add_entry(&table, vcek_guid, certs_len);
+    cert_table_add_entry(&table, ek_guid, certs_len);
 
     size_t table_size = cert_table_get_size(&table);
     size_t total_size = table_size + certs_len;
@@ -84,7 +89,7 @@ void handle_get_ext_report(int process_memfile_fd,
     memset(buffer, 0x00, total_size);
     memcpy(buffer, &table.entry[0], sizeof(struct cert_table_entry));
 
-    cert_table_append_cert(&table, buffer, total_size, vcek_guid, certs,
+    cert_table_append_cert(&table, buffer, total_size, ek_guid, certs,
                            certs_len);
 
     int page_size = sysconf(_SC_PAGESIZE);

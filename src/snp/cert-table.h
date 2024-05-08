@@ -7,6 +7,7 @@
 #include <uuid/uuid.h>
 
 extern const char vcek_guid[];
+extern const char vlek_guid[];
 extern const char ask_guid[];
 extern const char ark_guid[];
 
