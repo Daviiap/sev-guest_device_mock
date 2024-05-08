@@ -108,12 +108,13 @@ void handle_get_ext_report(int process_memfile_fd,
         exit(EXIT_FAILURE);
     }
 
-    ret = pwrite(process_memfile_fd, buffer, total_size,
+    /*
+        Must not verify error on this `pwrite` call because of the extended report flow.
+        It makes the first request just to get the certs size, so the `ext_report_req->certs_address`
+        will point to a invalid memory address and will result on error on `pwrite` call.
+    */
+    pwrite(process_memfile_fd, buffer, total_size,
                  ext_report_req->certs_address);
-
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
 
     cert_table_free(&table);
     free(buffer);
