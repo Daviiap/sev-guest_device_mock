@@ -1,26 +1,14 @@
 #include "handlers.h"
 
-#include <errno.h>
-#include <fcntl.h>
 #include <fuse/cuse_lowlevel.h>
-#include <fuse/fuse_opt.h>
-#include <openssl/ecdsa.h>
-#include <openssl/obj_mac.h>
-#include <openssl/sha.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ptrace.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
 
 #include "./sev_guest_ioctl.h"
-#include "snp/attestation.h"
 #include "snp/cert-table.h"
-#include "snp/sev-guest.h"
 
 char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
 char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
