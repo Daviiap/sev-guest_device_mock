@@ -1,10 +1,9 @@
 #!/bin/bash
 
-sudo apt install -y build-essential libfuse-dev libssl-dev pkg-config
+sudo apt install -y build-essential libfuse-dev libssl-dev pkg-config uuid-dev
 
 KEYS_GEN_DIR="keys_gen"
 TARGET_DIR="/etc/sev-guest"
-CERT_CHAIN_FILE="cert_chain.pem"
 
 # Build keys
 pushd "$KEYS_GEN_DIR"
@@ -17,13 +16,15 @@ sudo mkdir -p "$TARGET_DIR/vlek"
 echo "Created $TARGET_DIR directory"
 
 # Copy vcek files
-sudo cp "$KEYS_GEN_DIR/keys/vcek.key" "$TARGET_DIR/vcek/private.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vcek.crt" "$TARGET_DIR/vcek/public.pem"
-sudo cp "$KEYS_GEN_DIR/keys/$CERT_CHAIN_FILE" "$TARGET_DIR/vcek/"
+sudo cp "$KEYS_GEN_DIR/keys/vcek/ek.key" "$TARGET_DIR/vcek/private.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vcek/ek.pem" "$TARGET_DIR/vcek/public.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vcek/cert_chain.pem" "$TARGET_DIR/vcek/"
+sudo cp "$KEYS_GEN_DIR/keys/vcek/crl.der" "$TARGET_DIR/vcek/"
 echo "Copied vcek key, cert, and cert chain to $TARGET_DIR/vcek"
 
 # Copy vlek files
-sudo cp "$KEYS_GEN_DIR/keys/vlek.key" "$TARGET_DIR/vlek/private.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vlek.crt" "$TARGET_DIR/vlek/public.pem"
-sudo cp "$KEYS_GEN_DIR/keys/$CERT_CHAIN_FILE" "$TARGET_DIR/vlek/"
+sudo cp "$KEYS_GEN_DIR/keys/vlek/ek.key" "$TARGET_DIR/vlek/private.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vlek/ek.pem" "$TARGET_DIR/vlek/public.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vlek/cert_chain.pem" "$TARGET_DIR/vlek/"
+sudo cp "$KEYS_GEN_DIR/keys/vlek/crl.der" "$TARGET_DIR/vlek/"
 echo "Copied vlek key, cert, and cert chain to $TARGET_DIR/vlek"

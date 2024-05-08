@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse/cuse_lowlevel.h>
+#include <linux/types.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
@@ -56,7 +57,7 @@ void generate_random_array(uint8* array, int length) {
 int is_vlek_present() { return access(PRIVATE_VLEK_PATH, F_OK) == 0; }
 
 EC_KEY* read_ek(int key_sel) {
-    EC_KEY* eckey;
+    EC_KEY* eckey = NULL;
     switch (key_sel) {
         case KEY_SEL_DEFAULT:
             if (is_vlek_present()) {
@@ -145,10 +146,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     EC_KEY_free(eckey);
 }
 
-/*
-    Build an attestation report with mocked data
-*/
-void get_report(struct attestation_report* report, uint8 report_id[32]) {
+void get_report(struct attestation_report* report) {
     uint8 measurement[] = {
         0x72, 0xD9, 0x9E, 0x55, 0x0E, 0x7C, 0xB1, 0x2A, 0xBA, 0xB9, 0xC9, 0x61,
         0xE4, 0x7F, 0x34, 0x3A, 0xCC, 0x8F, 0xF3, 0x0B, 0x6A, 0x62, 0xB4, 0x2B,

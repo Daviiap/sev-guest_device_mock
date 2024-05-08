@@ -1,5 +1,5 @@
-# SEV-GUEST DEVICE MOCK
-This repository contains an implementation of a `sev-guest` character device mock using [CUSE (Character device in user space)](https://github.com/libfuse/libfuse/). The sev-guest character device is typically exposed inside AMD SEV-SNP guests VMs, allowing the guest to make requests to the AMD Secure Processor.
+# SEV-GUEST DEVICE MOCK (Go Module)
+This repository contains an implementation of a `sev-guest` character device mock using [CUSE (Character device in user space)](https://github.com/libfuse/libfuse/) to be used on Golang codes. The sev-guest character device is typically exposed inside AMD SEV-SNP guests VMs, allowing the guest to make requests to the AMD Secure Processor.
 
 **Please note that this mock implementation does not interact with the actual AMD Secure Processor and is intended for testing or educational purposes only.**
 
@@ -15,61 +15,65 @@ Currently, the following request is implemented in this mock `sev-guest` chardev
 
 To build the code, follow these steps:
 
-1. Ensure that you have `gcc`, `pkg-config`, `fuse` and `golang` installed on your system.
-
-2. Clone this repository to your local machine:
+1. Clone this repository to your local machine:
 
 ```bash
 git clone https://github.com/Daviiap/sev-guest_device_mock.git
 ```
 
-3. Change into the cloned directory:
+2. Change into the cloned directory:
 
 ```bash
 cd sev-guest_device_mock
 ```
 
-4. Run the configure script:
+3. Run the configure script:
 
 ```bash
 ./configure
 ```
 
-To run the configure script, you need to have root privileges. This script will generate dummy VCEK and VLEK, along with the respective cert_chain for both keys. Once generated, the script will move these files to the /etc/sev-guest directory.
-
-5. Now, you can build the code:
-
-```bash
-make
-```
-
-This command will use the provided Makefile to compile the code and generate the sev-guest binary inside the bin directory.
+To run the configure script, you need to have root privileges. This script will install the dependencies and generate dummy VCEK and VLEK, along with the respective cert_chain for both keys. Once generated, the script will move these files to the `/etc/sev-guest` directory.
 
 To verify the signature of the report, you can use the ./keys_gen/keys/vcek.crt file. It contains the essential certificate required for signature validation. Furthermore, you can rely on the ./keys_gen/keys/cert_chain.pem file to verify the signature of the vcek.crt certificate. This chain file guarantees the authenticity and integrity of the certificate by including all the necessary intermediate certificates in the validation process, similar to an authentic AMD environment.
 
 ## Usage
-Once the code is successfully built, you can run the sev-guest binary. Make sure you have the necessary permissions to access and use cuse on your system.
+To use the package on your Golang code, you must get it running:
 
-To run the sev-guest mock, use the following command:
-
-```bash
-sudo ./bin/sev-guest
+```sh
+go get github.com/Daviiap/sev-guest_device_mock
 ```
 
-To see the options use:
+An example of code using the mock:
 
-```bash
-sudo ./bin/sev-guest -h
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"time"
+
+	sevguest "github.com/Daviiap/sev-guest_device_mock/src"
+	"github.com/google/go-sev-guest/client"
+)
+
+func main() {
+	device_mock := sevguest.Device{}
+	go device_mock.Start()
+	time.Sleep(1 * time.Second)
+
+	device, _ := client.OpenDevice()
+	defer device.Close()
+
+	rawReport, err := client.GetRawReport(device, [64]byte{})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(rawReport)
+}
 ```
-
-## Cleaning Up
-To clean up the compiled object files and the sev-guest binary, you can run the following command:
-
-```bash
-make clean
-```
-
-This command will remove the object files and the sev-guest binary from the bin directory.
 
 ## Ref
 
@@ -78,4 +82,3 @@ This command will remove the object files and the sev-guest binary from the bin 
 ## Future work
 
 * Use a configuration file to define the report fields;
-* Enhance error handling;
