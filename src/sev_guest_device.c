@@ -39,7 +39,7 @@ static const char *usage =
     { t, offsetof(struct sev_guest_param, p), 1 }
 
 static struct attestation_report report;
-static struct fuse_session *se;
+static struct fuse_session *se = NULL;
 
 static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi) {
     fuse_reply_open(req, fi);
@@ -199,13 +199,12 @@ int init_device() {
     return 0;
 }
 
-int device_is_running() {
-    return access("/dev/sev-guest", F_OK) == 0 && se != NULL;
+void stop_device() {
+    fuse_session_exit(se);
 }
 
-void stop_device() {
-    cuse_lowlevel_teardown(se);
-    unlink("/dev/sev-guest");
+int device_is_running() {
+    return access("/dev/sev-guest", F_OK) == 0 && !fuse_session_exited(se);
 }
 
 int main(int argc, char **argv) {

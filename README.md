@@ -52,16 +52,15 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
 
 	sevguest "github.com/Daviiap/sev-guest_device_mock/src"
 	"github.com/google/go-sev-guest/client"
 )
 
 func main() {
-	device_mock := sevguest.Device{}
-	go device_mock.Start()
-	time.Sleep(1 * time.Second)
+	device_mock := sevguest.New()
+	device_mock.Start()
+	defer device_mock.Stop()
 
 	device, _ := client.OpenDevice()
 	defer device.Close()
@@ -73,6 +72,7 @@ func main() {
 	}
 	fmt.Println(rawReport)
 }
+
 ```
 
 ## Ref
