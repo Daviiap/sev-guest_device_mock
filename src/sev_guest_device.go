@@ -3,7 +3,7 @@
 
 package sevguest
 
-//#cgo CFLAGS: -Wall -D_FILE_OFFSET_BITS=64
+//#cgo CFLAGS: -D_FILE_OFFSET_BITS=64
 //#cgo LDFLAGS: -luuid -lssl -lcrypto -Wl,--allow-multiple-definition
 //#cgo pkg-config: fuse
 //#include <stdio.h>
@@ -12,12 +12,28 @@ package sevguest
 //#include "sev_guest_device.h"
 import "C"
 
-type Device struct{}
+type device struct{}
 
-func (*Device) Start() {
-	C.initDevice()
+func (d *device) Start() {
+	if !d.IsRunning() {
+		go C.init_device()
+		for !d.IsRunning() {
+		}
+	}
 }
 
-func (*Device) Stop() {
-	C.stopDevice()
+func (d *device) Stop() {
+	if d.IsRunning() {
+		C.stop_device()
+		for d.IsRunning() {
+		}
+	}
+}
+
+func (*device) IsRunning() bool {
+	return C.device_is_running() == 1
+}
+
+func New() *device {
+	return &device{}
 }

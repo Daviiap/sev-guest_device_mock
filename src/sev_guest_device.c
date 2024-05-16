@@ -151,7 +151,7 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
     .ioctl = sev_guest_ioctl,
 };
 
-int initDevice() {
+int init_device() {
     int argc = 2;
     char *argv[] = {"sev-guest", "-f"};
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -199,7 +199,11 @@ int initDevice() {
     return 0;
 }
 
-void stopDevice() { 
+int device_is_running() {
+    return access("/dev/sev-guest", F_OK) == 0 && se != NULL;
+}
+
+void stop_device() {
     cuse_lowlevel_teardown(se);
     unlink("/dev/sev-guest");
 }
