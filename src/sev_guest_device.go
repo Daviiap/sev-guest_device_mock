@@ -15,18 +15,14 @@ import "C"
 type device struct{}
 
 func (d *device) Start() {
-	if !d.IsRunning() {
-		go C.init_device()
-		for !d.IsRunning() {
-		}
+	go C.init_device()
+	for !d.IsRunning() {
 	}
 }
 
 func (d *device) Stop() {
-	if d.IsRunning() {
-		C.stop_device()
-		for d.IsRunning() {
-		}
+	C.stop_device()
+	for d.IsRunning() {
 	}
 }
 

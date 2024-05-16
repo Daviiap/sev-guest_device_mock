@@ -151,60 +151,61 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
     .ioctl = sev_guest_ioctl,
 };
 
+int device_is_running() {
+    return access("/dev/sev-guest", F_OK) == 0 && !fuse_session_exited(se);
+}
+
 int init_device() {
-    int argc = 2;
-    char *argv[] = {"sev-guest", "-f"};
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    struct sev_guest_param param = {0, 0, 0};
-    char dev_name[18] = "DEVNAME=sev-guest";
-    const char *dev_info_argv[] = {dev_name};
-    struct cuse_info dev_info;
-    int ret = 1;
+    if (!device_is_running()) {
+        int argc = 2;
+        char *argv[] = {"sev-guest", "-f"};
+        struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+        struct sev_guest_param param = {0, 0, 0};
+        char dev_name[18] = "DEVNAME=sev-guest";
+        const char *dev_info_argv[] = {dev_name};
+        struct cuse_info dev_info;
+        int ret = 1;
 
-    if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
-        printf("failed to parse option\n");
-        fuse_opt_free_args(&args);
-        return ret;
+        if (fuse_opt_parse(&args, &param, sev_guest_opts,
+                           sev_guest_process_arg)) {
+            printf("failed to parse option\n");
+            fuse_opt_free_args(&args);
+            return ret;
+        }
+
+        get_report(&report);
+
+        memset(&dev_info, 0x00, sizeof(dev_info));
+        dev_info.dev_major = param.major;
+        dev_info.dev_minor = param.minor;
+        dev_info.dev_info_argc = 1;
+        dev_info.dev_info_argv = dev_info_argv;
+        dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
+
+        int multithreaded;
+        int res;
+
+        se = cuse_lowlevel_setup(argc, argv, &dev_info, &sev_guest_clops,
+                                 &multithreaded, NULL);
+        if (se == NULL) {
+            return 1;
+        }
+
+        if (multithreaded) {
+            res = fuse_session_loop_mt(se);
+        } else {
+            res = fuse_session_loop(se);
+        }
+        if (res == -1) {
+            return 1;
+        }
+        cuse_lowlevel_teardown(se);
     }
-
-    get_report(&report);
-
-    memset(&dev_info, 0x00, sizeof(dev_info));
-    dev_info.dev_major = param.major;
-    dev_info.dev_minor = param.minor;
-    dev_info.dev_info_argc = 1;
-    dev_info.dev_info_argv = dev_info_argv;
-    dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
-
-    int multithreaded;
-    int res;
-
-    se = cuse_lowlevel_setup(argc, argv, &dev_info, &sev_guest_clops,
-                             &multithreaded, NULL);
-    if (se == NULL) {
-        return 1;
-    }
-
-    if (multithreaded) {
-        res = fuse_session_loop_mt(se);
-    } else {
-        res = fuse_session_loop(se);
-    }
-
-    cuse_lowlevel_teardown(se);
-    if (res == -1) {
-        return 1;
-    }
-
     return 0;
 }
 
 void stop_device() {
-    fuse_session_exit(se);
-}
-
-int device_is_running() {
-    return access("/dev/sev-guest", F_OK) == 0 && !fuse_session_exited(se);
+    if (device_is_running()) fuse_session_exit(se);
 }
 
 int main(int argc, char **argv) {
