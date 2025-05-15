@@ -6,6 +6,7 @@
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
+#include <openssl/err.h>
 #include <openssl/obj_mac.h>
 #include <openssl/pem.h>
 #include <openssl/sha.h>
@@ -28,22 +29,23 @@
 char PRIVATE_VCEK_PATH[128] = "/etc/sev-guest/vcek/private.pem";
 char PRIVATE_VLEK_PATH[128] = "/etc/sev-guest/vlek/private.pem";
 
-EC_KEY* read_ecdsa_key_from_file(const char* key_file) {
+EVP_PKEY* read_ecdsa_key_from_file(const char* key_file) {
     FILE* key_fp = fopen(key_file, "r");
     if (key_fp == NULL) {
         fprintf(stderr, "Error opening key file\n");
         return NULL;
     }
 
-    EC_KEY* eckey = PEM_read_ECPrivateKey(key_fp, NULL, NULL, NULL);
+    EVP_PKEY* pkey = PEM_read_PrivateKey(key_fp, NULL, NULL, NULL);
     fclose(key_fp);
 
-    if (eckey == NULL) {
+    if (pkey == NULL) {
         fprintf(stderr, "Error reading ECDSA key from file\n");
+        ERR_print_errors_fp(stderr);
         return NULL;
     }
 
-    return eckey;
+    return pkey;
 }
 
 void generate_random_array(uint8* array, int length) {
@@ -56,8 +58,8 @@ void generate_random_array(uint8* array, int length) {
 
 int is_vlek_present() { return access(PRIVATE_VLEK_PATH, F_OK) == 0; }
 
-EC_KEY* read_ek(int key_sel) {
-    EC_KEY* eckey = NULL;
+EVP_PKEY* read_ek(int key_sel) {
+    EVP_PKEY* eckey = NULL;
     switch (key_sel) {
         case KEY_SEL_DEFAULT:
             if (is_vlek_present()) {
@@ -116,7 +118,12 @@ void sha384(unsigned char* data, unsigned int* hash_len,
 void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     unsigned char* data = (unsigned char*)report;
 
-    EC_KEY* eckey = read_ek(key_sel);
+    EVP_PKEY* eckey = read_ek(key_sel);
+    if (eckey == NULL) {
+        fprintf(stderr, "Error loading key\n");
+        return;
+    }
+
     if (key_sel == KEY_SEL_VLEK ||
         (key_sel == KEY_SEL_DEFAULT && is_vlek_present())) {
         report->flags |= 0b00000100;
@@ -125,25 +132,61 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     }
 
     unsigned char hash[SHA384_DIGEST_LENGTH];
-    unsigned int hash_len;
-    sha384(data, &hash_len, hash);
+    SHA384(data, sizeof(struct attestation_report), hash);
 
-    ECDSA_SIG* ecdsa_signature = ECDSA_do_sign(hash, hash_len, eckey);
-    if (ecdsa_signature == NULL) {
-        fprintf(stderr, "Error creating ECDSA signature\n");
-        EC_KEY_free(eckey);
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (!mdctx) {
+        fprintf(stderr, "Error creating EVP_MD_CTX\n");
+        EVP_PKEY_free(eckey);
         return;
     }
 
-    BIGNUM* r_bn;
-    BIGNUM* s_bn;
-    ECDSA_SIG_get0(ecdsa_signature, (const BIGNUM**)&r_bn,
-                   (const BIGNUM**)&s_bn);
-    BN_bn2lebinpad(r_bn, report->signature.r, sizeof(report->signature.r));
-    BN_bn2lebinpad(s_bn, report->signature.s, sizeof(report->signature.s));
+    if (EVP_DigestSignInit(mdctx, NULL, EVP_sha384(), NULL, eckey) != 1) {
+        fprintf(stderr, "Error in EVP_DigestSignInit\n");
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(eckey);
+        return;
+    }
 
-    ECDSA_SIG_free(ecdsa_signature);
-    EC_KEY_free(eckey);
+    if (EVP_DigestSignUpdate(mdctx, hash, SHA384_DIGEST_LENGTH) != 1) {
+        fprintf(stderr, "Error in EVP_DigestSignUpdate\n");
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(eckey);
+        return;
+    }
+
+    size_t sig_len;
+    if (EVP_DigestSignFinal(mdctx, NULL, &sig_len) != 1) {
+        fprintf(stderr, "Error determining signature length\n");
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(eckey);
+        return;
+    }
+    
+    unsigned char* signature = OPENSSL_malloc(sig_len);
+    if (!signature) {
+        fprintf(stderr, "Error allocating memory for signature\n");
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(eckey);
+        return;
+    }
+
+    if (EVP_DigestSignFinal(mdctx, signature, &sig_len) != 1) {
+        fprintf(stderr, "Error in EVP_DigestSignFinal\n");
+        OPENSSL_free(signature);
+        EVP_MD_CTX_free(mdctx);
+        EVP_PKEY_free(eckey);
+        return;
+    }
+
+    // Assuming signature is split into two parts: R and S, equally
+    size_t half_sig_len = sig_len / 2;
+    memcpy(report->signature.r, signature, half_sig_len);
+    memcpy(report->signature.s, signature + half_sig_len, half_sig_len);
+
+    OPENSSL_free(signature);
+    EVP_MD_CTX_free(mdctx);
+    EVP_PKEY_free(eckey);
 }
 
 void get_report(struct attestation_report* report) {
