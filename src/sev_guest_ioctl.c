@@ -115,13 +115,13 @@ void sha384(unsigned char* data, unsigned int* hash_len,
     EVP_MD_CTX_free(mdctx);
 }
 
-void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
+int sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     unsigned char* data = (unsigned char*)report;
 
     EVP_PKEY* eckey = read_ek(key_sel);
     if (eckey == NULL) {
         fprintf(stderr, "Error loading key\n");
-        return;
+        return -1;
     }
 
     if (key_sel == KEY_SEL_VLEK ||
@@ -138,21 +138,21 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     if (!mdctx) {
         fprintf(stderr, "Error creating EVP_MD_CTX\n");
         EVP_PKEY_free(eckey);
-        return;
+        return -1;
     }
 
     if (EVP_DigestSignInit(mdctx, NULL, EVP_sha384(), NULL, eckey) != 1) {
         fprintf(stderr, "Error in EVP_DigestSignInit\n");
         EVP_MD_CTX_free(mdctx);
         EVP_PKEY_free(eckey);
-        return;
+        return -1;
     }
 
     if (EVP_DigestSignUpdate(mdctx, hash, SHA384_DIGEST_LENGTH) != 1) {
         fprintf(stderr, "Error in EVP_DigestSignUpdate\n");
         EVP_MD_CTX_free(mdctx);
         EVP_PKEY_free(eckey);
-        return;
+        return -1;
     }
 
     size_t sig_len;
@@ -160,7 +160,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         fprintf(stderr, "Error determining signature length\n");
         EVP_MD_CTX_free(mdctx);
         EVP_PKEY_free(eckey);
-        return;
+        return -1;
     }
     
     unsigned char* signature = OPENSSL_malloc(sig_len);
@@ -168,7 +168,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         fprintf(stderr, "Error allocating memory for signature\n");
         EVP_MD_CTX_free(mdctx);
         EVP_PKEY_free(eckey);
-        return;
+        return -1;
     }
 
     if (EVP_DigestSignFinal(mdctx, signature, &sig_len) != 1) {
@@ -176,7 +176,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         OPENSSL_free(signature);
         EVP_MD_CTX_free(mdctx);
         EVP_PKEY_free(eckey);
-        return;
+        return -1;
     }
 
     // Assuming signature is split into two parts: R and S, equally
@@ -187,6 +187,7 @@ void sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
     OPENSSL_free(signature);
     EVP_MD_CTX_free(mdctx);
     EVP_PKEY_free(eckey);
+    return 0;
 }
 
 void get_report(struct attestation_report* report) {

@@ -11,6 +11,8 @@
 #include "./sev_guest_ioctl.h"
 #include "snp/cert-table.h"
 
+#define MAX_CERT_SIZE (16 * 1024 * 1024)
+
 char PUBLIC_VCEK_PATH[128] = "/etc/sev-guest/vcek/public.pem";
 char PUBLIC_VLEK_PATH[128] = "/etc/sev-guest/vlek/public.pem";
 
@@ -60,7 +62,10 @@ void handle_snp_get_report(fuse_req_t req, int cmd, void *arg,
            sizeof(report_req->user_data));
     report.vmpl = report_req->vmpl;
 
-    sign_attestation_report(&report, report_req->key_sel);
+    if (sign_attestation_report(&report, report_req->key_sel) != 0) {
+        fuse_reply_err(req, EIO);
+        return;
+    }
 
     struct msg_report_resp report_resp_msg;
     memset(&report_resp_msg, 0, sizeof(report_resp_msg));
@@ -101,7 +106,17 @@ static size_t get_certs_size(uint32_t key_sel, char *ek_guid, uint8_t **certs_ou
     }
 
     uint32_t certs_len = (uint32_t)stat_buf.st_size;
+    if (certs_len == 0 || certs_len > MAX_CERT_SIZE) {
+        close(cert_fd);
+        return 0;
+    }
+
     uint8_t *certs = malloc(certs_len);
+    if (!certs) {
+        close(cert_fd);
+        return 0;
+    }
+
     if (read(cert_fd, certs, certs_len) != certs_len) {
         free(certs);
         close(cert_fd);
@@ -221,7 +236,11 @@ void handle_snp_get_ext_report(fuse_req_t req, int cmd, void *arg,
         get_report(&report);
         memcpy(report.report_data, ext_req->data.user_data, sizeof(ext_req->data.user_data));
         report.vmpl = ext_req->data.vmpl;
-        sign_attestation_report(&report, ext_req->data.key_sel);
+        if (sign_attestation_report(&report, ext_req->data.key_sel) != 0) {
+            fuse_reply_err(req, EIO);
+            free(certs_buffer);
+            return;
+        }
 
         struct msg_report_resp report_resp_msg;
         memset(&report_resp_msg, 0, sizeof(report_resp_msg));

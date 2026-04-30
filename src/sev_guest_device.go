@@ -22,6 +22,7 @@ func (d *device) Start() {
 	go func() {
 		errCh <- int(C.init_device())
 	}()
+	timeout := time.After(5 * time.Second)
 	for !d.IsRunning() {
 		select {
 		case err := <-errCh:
@@ -29,6 +30,8 @@ func (d *device) Start() {
 				panic("failed to initialize sev-guest device mock")
 			}
 			return
+		case <-timeout:
+			panic("timeout waiting for sev-guest device to become ready")
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
