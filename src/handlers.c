@@ -62,10 +62,15 @@ void handle_snp_get_report(fuse_req_t req, int cmd, void *arg,
            sizeof(report_req->user_data));
     report.vmpl = report_req->vmpl;
 
+    printf("[debug] generating report with key_sel=%u, vmpl=%u\n", report_req->key_sel, report_req->vmpl);
+
     if (sign_attestation_report(&report, report_req->key_sel) != 0) {
+        printf("[error] sign_attestation_report failed\n");
         fuse_reply_err(req, EIO);
         return;
     }
+
+    printf("[debug] report generated and signed successfully\n");
 
     struct msg_report_resp report_resp_msg;
     memset(&report_resp_msg, 0, sizeof(report_resp_msg));
@@ -167,6 +172,7 @@ void handle_snp_get_ext_report(fuse_req_t req, int cmd, void *arg,
         size_t total_certs_size = get_certs_size(ext_req->data.key_sel, NULL, NULL, NULL);
 
         if (ext_req->certs_len < total_certs_size) {
+            printf("[debug] EXT_REPORT (phase 3): provided certs_len (%u) is smaller than required (%zu). Returning fw_err.\n", ext_req->certs_len, total_certs_size);
             struct iovec in_iov[3] = {
                 {arg, sizeof(*ioctl_req)},
                 {(void *)(uintptr_t)ioctl_req->req_data, sizeof(*ext_req)},
@@ -179,6 +185,7 @@ void handle_snp_get_ext_report(fuse_req_t req, int cmd, void *arg,
             fuse_reply_ioctl_retry(req, in_iov, 3, out_iov, 2);
             return;
         } else {
+            printf("[debug] EXT_REPORT (phase 3): certs_len (%u) is sufficient (%zu required). Proceeding.\n", ext_req->certs_len, total_certs_size);
             struct iovec in_iov[3] = {
                 {arg, sizeof(*ioctl_req)},
                 {(void *)(uintptr_t)ioctl_req->req_data, sizeof(*ext_req)},
@@ -236,11 +243,17 @@ void handle_snp_get_ext_report(fuse_req_t req, int cmd, void *arg,
         get_report(&report);
         memcpy(report.report_data, ext_req->data.user_data, sizeof(ext_req->data.user_data));
         report.vmpl = ext_req->data.vmpl;
+        
+        printf("[debug] generating ext_report with key_sel=%u, vmpl=%u\n", ext_req->data.key_sel, ext_req->data.vmpl);
+        
         if (sign_attestation_report(&report, ext_req->data.key_sel) != 0) {
+            printf("[error] sign_attestation_report failed for EXT_REPORT\n");
             fuse_reply_err(req, EIO);
             free(certs_buffer);
             return;
         }
+        
+        printf("[debug] ext_report generated and signed successfully\n");
 
         struct msg_report_resp report_resp_msg;
         memset(&report_resp_msg, 0, sizeof(report_resp_msg));

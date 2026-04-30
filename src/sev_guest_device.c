@@ -90,12 +90,15 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
 
     switch (cmd) {
         case SNP_GET_REPORT:
+            printf("[debug] IOCTL received: SNP_GET_REPORT (in_bufsz=%zu)\n", in_bufsz);
             handle_snp_get_report(req, cmd, arg, in_buf, in_bufsz);
             break;
         case SNP_GET_EXT_REPORT:
+            printf("[debug] IOCTL received: SNP_GET_EXT_REPORT (in_bufsz=%zu)\n", in_bufsz);
             handle_snp_get_ext_report(req, cmd, arg, in_buf, in_bufsz);
             break;
         default:
+            printf("[debug] IOCTL received: UNKNOWN cmd=0x%x\n", cmd);
             fuse_reply_err(req, EINVAL);
             return;
     }
@@ -140,11 +143,15 @@ int init_device() {
         int multithreaded;
         int res;
 
+        printf("[info] initializing sev-guest device mock...\n");
         se = cuse_lowlevel_setup(argc, argv, &dev_info, &sev_guest_clops,
                                  &multithreaded, NULL);
         if (se == NULL) {
+            printf("[error] cuse_lowlevel_setup failed\n");
             return 1;
         }
+
+        printf("[info] sev-guest device mock running (multithreaded=%d)\n", multithreaded);
 
         if (multithreaded) {
             res = fuse_session_loop_mt(se);
@@ -161,7 +168,10 @@ int init_device() {
 }
 
 void stop_device() {
-    if (device_is_running()) fuse_session_exit(se);
+    if (device_is_running()) {
+        printf("[info] stopping sev-guest device mock...\n");
+        fuse_session_exit(se);
+    }
 }
 
 int main(int argc, char **argv) {
