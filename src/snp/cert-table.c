@@ -1,6 +1,6 @@
 /* Copyright (C) 2021 Advanced Micro Devices, Inc. */
 
-#include "snp/cert-table.h"
+#include "cert-table.h"
 
 #include <errno.h>
 #include <stdbool.h>

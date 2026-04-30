@@ -8,8 +8,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "./sev_guest_ioctl.h"
-#include "snp/cert-table.h"
+#include "../crypto/crypto.h"
+#include "../snp/cert-table.h"
+#include "../snp/report.h"
+#include "../snp/sev-guest.h"
 
 #define MAX_CERT_SIZE (16 * 1024 * 1024)
 

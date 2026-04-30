@@ -4,23 +4,16 @@
 #include <fcntl.h>
 #include <fuse/cuse_lowlevel.h>
 #include <fuse/fuse_opt.h>
-#include <openssl/ecdsa.h>
-#include <openssl/obj_mac.h>
-#include <openssl/sha.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ptrace.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
 
-#include "./sev_guest_ioctl.h"
-#include "handlers.h"
+#include "fuse/handlers.h"
 #include "snp/attestation.h"
 #include "snp/cert-table.h"
+#include "snp/report.h"
 #include "snp/sev-guest.h"
 
 static const char *usage =

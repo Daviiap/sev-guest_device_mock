@@ -7,7 +7,7 @@ TARGET = bin/sev-guest
 SRC_DIR = src
 OBJ_DIR = bin
 
-SOURCES = $(wildcard $(SRC_DIR)/*.c)
+SOURCES = $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/crypto/*.c $(SRC_DIR)/fuse/*.c $(SRC_DIR)/snp/*.c)
 OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
 
 .PHONY: all clean
@@ -15,7 +15,7 @@ OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
 all: create_directories $(TARGET)
 
 create_directories:
-	mkdir -p bin
+	mkdir -p $(OBJ_DIR) $(OBJ_DIR)/crypto $(OBJ_DIR)/fuse $(OBJ_DIR)/snp
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@ -lssl -lcrypto $(LDFLAGS) $(UUID_LDFLAGS)
@@ -24,4 +24,4 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -rf $(OBJ_DIR)/* $(TARGET)
