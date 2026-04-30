@@ -80,70 +80,104 @@ static int sev_guest_process_arg(void *data, const char *arg, int key,
 void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
                      struct fuse_file_info *fi, unsigned flags,
                      const void *in_buf, size_t in_bufsz, size_t out_bufsz) {
+    (void)fi;
+
     if (flags & FUSE_IOCTL_COMPAT) {
         fuse_reply_err(req, ENOSYS);
         return;
     }
 
-    const struct fuse_ctx *ctx = fuse_req_ctx(req);
-    pid_t pid = ctx->pid;
-    off_t addr = (off_t)(uintptr_t)arg;
+    if (in_bufsz == 0) {
+        struct iovec in_iov = {arg, sizeof(struct snp_guest_request_ioctl)};
+        fuse_reply_ioctl_retry(req, &in_iov, 1, NULL, 0);
+        return;
+    }
 
-    struct snp_guest_request_ioctl ioctl_request;
-    struct snp_report_req report_req;
-    struct snp_report_resp report_resp;
+    if (in_bufsz == sizeof(struct snp_guest_request_ioctl)) {
+        const struct snp_guest_request_ioctl *ioctl_req =
+            (const struct snp_guest_request_ioctl *)in_buf;
+
+        size_t req_data_size;
+        switch (cmd) {
+            case SNP_GET_REPORT:
+                req_data_size = sizeof(struct snp_report_req);
+                break;
+            case SNP_GET_EXT_REPORT:
+                req_data_size = sizeof(struct snp_ext_report_req);
+                break;
+            default:
+                fuse_reply_err(req, EINVAL);
+                return;
+        }
+
+        struct iovec in_iov[2] = {
+            {arg, sizeof(struct snp_guest_request_ioctl)},
+            {(void *)(uintptr_t)ioctl_req->req_data, req_data_size},
+        };
+        struct iovec out_iov[2] = {
+            {arg, sizeof(struct snp_guest_request_ioctl)},
+            {(void *)(uintptr_t)ioctl_req->resp_data,
+             sizeof(struct snp_report_resp)},
+        };
+        fuse_reply_ioctl_retry(req, in_iov, 2, out_iov, 2);
+        return;
+    }
+
+    const struct snp_guest_request_ioctl *ioctl_req =
+        (const struct snp_guest_request_ioctl *)in_buf;
+    const void *req_data = (const char *)in_buf + sizeof(*ioctl_req);
+
+    struct {
+        struct snp_guest_request_ioctl ioctl_out;
+        struct snp_report_resp resp_out;
+    } out;
+    memset(&out, 0, sizeof(out));
+    memcpy(&out.ioctl_out, ioctl_req, sizeof(*ioctl_req));
+    out.ioctl_out.fw_err = 0;
+
     struct msg_report_resp report_resp_msg;
-    struct snp_ext_report_req ext_report_req;
-    char file[64];
+    memset(&report_resp_msg, 0, sizeof(report_resp_msg));
 
-    sprintf(file, "/proc/%ld/mem", (long)pid);
-    int process_memfile_fd = open(file, O_RDWR);
-
-    ptrace(PTRACE_SEIZE, pid, 0, 0);
-
-    int ret =
-        pread(process_memfile_fd, &ioctl_request, sizeof(ioctl_request), addr);
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
-    ret = pread(process_memfile_fd, &report_resp, sizeof(report_resp),
-                ioctl_request.resp_data);
-    if (ret == -1) {
-        exit(EXIT_FAILURE);
-    }
     switch (cmd) {
-        case SNP_GET_REPORT:
-            ret = pread(process_memfile_fd, &report_req, sizeof(report_req),
-                        (ioctl_request).req_data);
-            if (ret == -1) {
-                exit(EXIT_FAILURE);
-            }
-            handle_get_report(process_memfile_fd, &report_req, &ioctl_request,
-                              &report_resp_msg, &report_resp, &report);
+        case SNP_GET_REPORT: {
+            struct snp_report_req report_req;
+            memcpy(&report_req, req_data, sizeof(report_req));
+
+            memcpy(report.report_data, report_req.user_data,
+                   sizeof(report_req.user_data));
+            report.vmpl = report_req.vmpl;
+
+            sign_attestation_report(&report, report_req.key_sel);
+
+            report_resp_msg.report_size = (int)sizeof(report);
+            memcpy(&report_resp_msg.report, &report, sizeof(report));
+            memcpy(out.resp_out.data, &report_resp_msg,
+                   sizeof(report_resp_msg));
             break;
-        case SNP_GET_EXT_REPORT:
-            ret = pread(process_memfile_fd, &ext_report_req,
-                        sizeof(ext_report_req), (ioctl_request).req_data);
-            if (ret == -1) {
-                exit(EXIT_FAILURE);
-            }
-            report_req = (ext_report_req).data;
-            handle_get_ext_report(process_memfile_fd, &report_req,
-                                  &ioctl_request, &report_resp_msg,
-                                  &ext_report_req, &report_resp, &report);
+        }
+        case SNP_GET_EXT_REPORT: {
+            struct snp_ext_report_req ext_report_req;
+            memcpy(&ext_report_req, req_data, sizeof(ext_report_req));
+            struct snp_report_req report_req = ext_report_req.data;
+
+            memcpy(report.report_data, report_req.user_data,
+                   sizeof(report_req.user_data));
+            report.vmpl = report_req.vmpl;
+
+            sign_attestation_report(&report, report_req.key_sel);
+
+            report_resp_msg.report_size = (int)sizeof(report);
+            memcpy(&report_resp_msg.report, &report, sizeof(report));
+            memcpy(out.resp_out.data, &report_resp_msg,
+                   sizeof(report_resp_msg));
             break;
+        }
         default:
-            close(process_memfile_fd);
             fuse_reply_err(req, EINVAL);
             return;
     }
 
-    close(process_memfile_fd);
-
-    fuse_reply_ioctl(req, 0, NULL, 0);
-
-    ptrace(PTRACE_DETACH, pid, 0, 0);
-    waitpid(pid, NULL, 0);
+    fuse_reply_ioctl(req, 0, &out, sizeof(out));
 }
 
 static const struct cuse_lowlevel_ops sev_guest_clops = {
@@ -152,7 +186,7 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
 };
 
 int device_is_running() {
-    return access("/dev/sev-guest", F_OK) == 0 && !fuse_session_exited(se);
+    return se != NULL && access("/dev/sev-guest", F_OK) == 0 && !fuse_session_exited(se);
 }
 
 int init_device() {
@@ -200,6 +234,7 @@ int init_device() {
             return 1;
         }
         cuse_lowlevel_teardown(se);
+        se = NULL;
     }
     return 0;
 }

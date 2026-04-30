@@ -1,5 +1,4 @@
 //go:build cgo
-// +build cgo
 
 package sevguest
 
@@ -12,17 +11,34 @@ package sevguest
 //#include "sev_guest_device.h"
 import "C"
 
+import (
+	"time"
+)
+
 type device struct{}
 
 func (d *device) Start() {
-	go C.init_device()
+	errCh := make(chan int, 1)
+	go func() {
+		errCh <- int(C.init_device())
+	}()
 	for !d.IsRunning() {
+		select {
+		case err := <-errCh:
+			if err != 0 {
+				panic("failed to initialize sev-guest device mock")
+			}
+			return
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 }
 
 func (d *device) Stop() {
 	C.stop_device()
 	for d.IsRunning() {
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
