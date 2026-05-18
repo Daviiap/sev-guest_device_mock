@@ -7,10 +7,12 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -66,7 +68,13 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 	return cert, caPrivateKey
 }
 
-func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
+func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekType string) (*x509.Certificate, *rsa.PrivateKey) {
+	var commonName string
+	if ekType == "vlek" {
+		commonName = "SEV-VLEK-Milan"
+	} else {
+		commonName = "SEV-Milan"
+	}
 	askPrivateKey, err := generatePrivateKey()
 	if err != nil {
 		fmt.Printf("Failed to generate ask CA private key: %v", err)
@@ -82,7 +90,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x
 			Locality:           []string{"Santa Clara"},
 			Province:           []string{"CA"},
 			Organization:       []string{"Advanced Micro Devices"},
-			CommonName:         "SEV-Milan",
+			CommonName:         commonName,
 		},
 		Issuer: pkix.Name{
 			OrganizationalUnit: []string{"Engineering"},
@@ -114,7 +122,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*x
 	return cert, askPrivateKey
 }
 
-func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, ekType string) (*x509.Certificate, *ecdsa.PrivateKey) {
 	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		fmt.Printf("Failed to generate ECDSA key pair: %v", err)
@@ -122,20 +130,41 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey) (
 	}
 
 	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber:       big.NewInt(1),
+		SignatureAlgorithm: x509.SHA384WithRSAPSS,
 		Subject: pkix.Name{
 			OrganizationalUnit: []string{"Engineering"},
 			Country:            []string{"US"},
 			Locality:           []string{"Santa Clara"},
 			Province:           []string{"CA"},
 			Organization:       []string{"Advanced Micro Devices"},
-			CommonName:         "SEV-Milan",
+			CommonName:         "SEV-" + strings.ToUpper(ekType),
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(100, 0, 0),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
+	}
+
+	asn1Zero, _ := asn1.Marshal(0)
+	productNameAsn1, _ := asn1.MarshalWithParams("Milan", "ia5")
+
+	template.ExtraExtensions = []pkix.Extension{
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 1}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 2}), Value: productNameAsn1},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 1}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 2}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 3}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 4}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 5}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 6}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 7}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 8}), Value: asn1Zero},
+	}
+	if ekType == "vlek" {
+		cspidAsn1, _ := asn1.MarshalWithParams("go-sev-guest", "ia5")
+		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 5}), Value: cspidAsn1})
+	} else {
+		hwidAsn1, _ := asn1.Marshal(make([]byte, 64))
+		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 4}), Value: hwidAsn1})
 	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, askCert, key.Public(), askPrivateKey)
@@ -209,12 +238,12 @@ func store(path, keyType string, bytes []byte) {
 }
 
 func generateKeys(arkCert *x509.Certificate, arkKey *rsa.PrivateKey, ekType string) {
-	askCert, askKey := generateASK(arkCert, arkKey)
+	askCert, askKey := generateASK(arkCert, arkKey, ekType)
 	askCRL := generateCRL(askCert, askKey)
 
 	cert_chain := buildCertChain(arkCert, askCert)
 
-	ekCert, ekKey := generateChipKey(askCert, askKey)
+	ekCert, ekKey := generateChipKey(askCert, askKey, ekType)
 
 	valid := validateCRLSignature(askCRL, askCert)
 	if !valid {
@@ -244,7 +273,7 @@ func generateKeys(arkCert *x509.Certificate, arkKey *rsa.PrivateKey, ekType stri
 
 	os.WriteFile("./keys/"+ekType+"/cert_chain.pem", chainPEM, 0644)
 
-	store("./keys/"+ekType+"/ek.pem", "CERTIFICATE", arkCert.Raw)
+	store("./keys/"+ekType+"/ek.pem", "CERTIFICATE", ekCert.Raw)
 	ekKeyBytes, _ := x509.MarshalECPrivateKey(ekKey)
 	store("./keys/"+ekType+"/ek.key", "EC PRIVATE KEY", ekKeyBytes)
 }
