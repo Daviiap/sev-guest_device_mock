@@ -51,6 +51,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 		SignatureAlgorithm:    x509.SHA384WithRSAPSS,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
+		CRLDistributionPoints: []string{"https://kdsintf.amd.com/vcek/v1/Milan/crl"},
 	}
 
 	caCertificate, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, caPrivateKey.Public(), caPrivateKey)
@@ -70,10 +71,13 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 
 func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekType string) (*x509.Certificate, *rsa.PrivateKey) {
 	var commonName string
+	var crlUrl string
 	if ekType == "vlek" {
 		commonName = "SEV-VLEK-Milan"
+		crlUrl = "https://kdsintf.amd.com/vlek/v1/Milan/crl"
 	} else {
-		commonName = "SEV-Milan"
+		commonName = "SEV-VCEK-Milan"
+		crlUrl = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
 	}
 	askPrivateKey, err := generatePrivateKey()
 	if err != nil {
@@ -105,6 +109,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekT
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
+		CRLDistributionPoints: []string{crlUrl},
 	}
 
 	askCertificate, err := x509.CreateCertificate(rand.Reader, askTemplate, caTemplate, askPrivateKey.Public(), caPrivateKey)
@@ -140,8 +145,8 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 			Organization:       []string{"Advanced Micro Devices"},
 			CommonName:         "SEV-" + strings.ToUpper(ekType),
 		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(100, 0, 0),
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().AddDate(100, 0, 0),
 	}
 
 	asn1Zero, _ := asn1.Marshal(0)

@@ -83,9 +83,6 @@ int sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         report->flags &= 0b11111011;
     }
 
-    unsigned char hash[SHA384_DIGEST_LENGTH];
-    SHA384(data, sizeof(struct attestation_report), hash);
-
     EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
     if (!mdctx) {
         fprintf(stderr, "Error creating EVP_MD_CTX\n");
@@ -100,7 +97,8 @@ int sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         return -1;
     }
 
-    if (EVP_DigestSignUpdate(mdctx, hash, SHA384_DIGEST_LENGTH) != 1) {
+    size_t data_len = sizeof(struct attestation_report) - sizeof(struct signature);
+    if (EVP_DigestSignUpdate(mdctx, data, data_len) != 1) {
         fprintf(stderr, "Error in EVP_DigestSignUpdate\n");
         EVP_MD_CTX_free(mdctx);
         EVP_PKEY_free(eckey);
@@ -131,10 +129,28 @@ int sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         return -1;
     }
 
-    // Assuming signature is split into two parts: R and S, equally
-    size_t half_sig_len = sig_len / 2;
-    memcpy(report->signature.r, signature, half_sig_len);
-    memcpy(report->signature.s, signature + half_sig_len, half_sig_len);
+    const unsigned char *p = signature;
+    ECDSA_SIG *ecdsa_sig = d2i_ECDSA_SIG(NULL, &p, sig_len);
+    if (ecdsa_sig) {
+        const BIGNUM *r = ECDSA_SIG_get0_r(ecdsa_sig);
+        const BIGNUM *s = ECDSA_SIG_get0_s(ecdsa_sig);
+
+        memset(report->signature.r, 0, 72);
+        memset(report->signature.s, 0, 72);
+
+        int r_len = BN_num_bytes(r);
+        int s_len = BN_num_bytes(s);
+
+        if (r_len <= 72) {
+            BN_bn2bin(r, report->signature.r + (72 - r_len));
+        }
+        if (s_len <= 72) {
+            BN_bn2bin(s, report->signature.s + (72 - s_len));
+        }
+        ECDSA_SIG_free(ecdsa_sig);
+    } else {
+        fprintf(stderr, "Error decoding ECDSA signature\n");
+    }
 
     OPENSSL_free(signature);
     EVP_MD_CTX_free(mdctx);
