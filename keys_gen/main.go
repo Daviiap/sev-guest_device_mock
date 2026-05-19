@@ -46,7 +46,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 			CommonName:         "ARK-Milan",
 		},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(100, 0, 0),
+		NotAfter:  time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		SignatureAlgorithm:    x509.SHA384WithRSAPSS,
 		BasicConstraintsValid: true,
@@ -105,7 +105,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekT
 			CommonName:         "ARK-Milan",
 		},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(100, 0, 0),
+		NotAfter:  time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
@@ -189,7 +189,7 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 			CommonName:         "SEV-" + strings.ToUpper(ekType),
 		},
 		NotBefore: time.Now(),
-		NotAfter:  time.Now().AddDate(100, 0, 0),
+		NotAfter:  time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
 	}
 
 	asn1Zero, _ := asn1.Marshal(0)
