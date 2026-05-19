@@ -64,7 +64,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 			CommonName:         "ARK-Milan",
 		},
 		NotBefore:             time.Now(),
-		NotAfter:  time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
+		NotAfter:              time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		SignatureAlgorithm:    x509.SHA384WithRSAPSS,
 		BasicConstraintsValid: true,
@@ -178,11 +178,11 @@ func getReportInfo() ReportInfo {
 		info.TEE = data[385]
 		info.SNP = data[390]
 		info.Microcode = data[391]
-		
+
 		// chip_id is 64 bytes starting at offset 416
 		info.ChipId = make([]byte, 64)
 		copy(info.ChipId, data[416:480])
-		
+
 		fmt.Printf("Loaded values from report.bin: BootLoader=%d, TEE=%d, SNP=%d, Microcode=%d, ChipId=%x...\n",
 			info.BootLoader, info.TEE, info.SNP, info.Microcode, info.ChipId[:8])
 	} else {
@@ -251,7 +251,6 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 		hwidAsn1, _ := asn1.Marshal(info.ChipId)
 		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 4}), Value: hwidAsn1})
 	}
-
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, askCert, key.Public(), askPrivateKey)
 	if err != nil {
