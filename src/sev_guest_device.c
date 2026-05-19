@@ -167,29 +167,30 @@ void stop_device() {
     }
 }
 
-int main(int argc, char **argv) {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    struct sev_guest_param param = {0, 0, 0};
-    char dev_name[18] = "DEVNAME=sev-guest";
-    const char *dev_info_argv[] = {dev_name};
-    struct cuse_info dev_info;
-    int ret = 1;
+// This code is commented to make the Go code the mais entrypoint for the mock
+// int main(int argc, char **argv) {
+//     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+//     struct sev_guest_param param = {0, 0, 0};
+//     char dev_name[18] = "DEVNAME=sev-guest";
+//     const char *dev_info_argv[] = {dev_name};
+//     struct cuse_info dev_info;
+//     int ret = 1;
 
-    if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
-        printf("failed to parse option\n");
-        fuse_opt_free_args(&args);
-        return ret;
-    }
+//     if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
+//         printf("failed to parse option\n");
+//         fuse_opt_free_args(&args);
+//         return ret;
+//     }
 
-    get_report(&report);
+//     get_report(&report);
 
-    memset(&dev_info, 0x00, sizeof(dev_info));
-    dev_info.dev_major = param.major;
-    dev_info.dev_minor = param.minor;
-    dev_info.dev_info_argc = 1;
-    dev_info.dev_info_argv = dev_info_argv;
-    dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
+//     memset(&dev_info, 0x00, sizeof(dev_info));
+//     dev_info.dev_major = param.major;
+//     dev_info.dev_minor = param.minor;
+//     dev_info.dev_info_argc = 1;
+//     dev_info.dev_info_argv = dev_info_argv;
+//     dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
 
-    return cuse_lowlevel_main(args.argc, args.argv, &dev_info, &sev_guest_clops,
-                              NULL);
-}
+//     return cuse_lowlevel_main(args.argc, args.argv, &dev_info, &sev_guest_clops,
+//                               NULL);
+// }
