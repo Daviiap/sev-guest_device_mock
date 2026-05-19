@@ -11,9 +11,9 @@ SOURCES = $(filter-out $(SRC_DIR)/imports.c, $(wildcard $(SRC_DIR)/*.c $(SRC_DIR
 OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
 
 
-.PHONY: all clean
+.PHONY: all clean go_build
 
-all: create_directories $(TARGET)
+all: create_directories $(TARGET) go_build
 
 create_directories:
 	mkdir -p $(OBJ_DIR) $(OBJ_DIR)/crypto $(OBJ_DIR)/fuse $(OBJ_DIR)/snp
@@ -23,6 +23,9 @@ $(TARGET): $(OBJECTS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
+go_build:
+	go build -o $(OBJ_DIR)/main main.go
 
 clean:
 	rm -rf $(OBJ_DIR)/* $(TARGET)

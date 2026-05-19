@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -15,6 +16,23 @@ import (
 	"strings"
 	"time"
 )
+
+type Config struct {
+	KdsPort int `json:"kds_port"`
+}
+
+var appConfig Config
+
+func init() {
+	appConfig.KdsPort = 8080 // default
+	data, err := os.ReadFile("config.json")
+	if err != nil {
+		data, err = os.ReadFile("../config.json")
+	}
+	if err == nil {
+		json.Unmarshal(data, &appConfig)
+	}
+}
 
 func generatePrivateKey() (*rsa.PrivateKey, error) {
 	return rsa.GenerateKey(rand.Reader, 4096)
@@ -51,7 +69,7 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 		SignatureAlgorithm:    x509.SHA384WithRSAPSS,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
-		CRLDistributionPoints: []string{"https://kdsintf.amd.com/vcek/v1/Milan/crl"},
+		CRLDistributionPoints: []string{fmt.Sprintf("http://localhost:%d/vcek/v1/Milan/crl", appConfig.KdsPort)},
 	}
 
 	caCertificate, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, caPrivateKey.Public(), caPrivateKey)
@@ -72,12 +90,15 @@ func generateARK() (*x509.Certificate, *rsa.PrivateKey) {
 func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekType string) (*x509.Certificate, *rsa.PrivateKey) {
 	var commonName string
 	var crlUrl string
+	var serialNumber int64
 	if ekType == "vlek" {
 		commonName = "SEV-VLEK-Milan"
-		crlUrl = "https://kdsintf.amd.com/vlek/v1/Milan/crl"
+		crlUrl = fmt.Sprintf("http://localhost:%d/vlek/v1/Milan/crl", appConfig.KdsPort)
+		serialNumber = 65793
 	} else {
-		commonName = "SEV-VCEK-Milan"
-		crlUrl = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
+		commonName = "SEV-Milan"
+		crlUrl = fmt.Sprintf("http://localhost:%d/vcek/v1/Milan/crl", appConfig.KdsPort)
+		serialNumber = 65537
 	}
 	askPrivateKey, err := generatePrivateKey()
 	if err != nil {
@@ -86,7 +107,7 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekT
 	}
 
 	askTemplate := &x509.Certificate{
-		SerialNumber:       big.NewInt(65793),
+		SerialNumber:       big.NewInt(serialNumber),
 		SignatureAlgorithm: x509.SHA384WithRSAPSS,
 		Subject: pkix.Name{
 			OrganizationalUnit: []string{"Engineering"},
@@ -105,10 +126,12 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekT
 			CommonName:         "ARK-Milan",
 		},
 		NotBefore:             time.Now(),
-		NotAfter:  time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		NotAfter:              time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
+		KeyUsage:              x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
 		CRLDistributionPoints: []string{crlUrl},
 	}
 
@@ -177,6 +200,13 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 		return nil, nil
 	}
 
+	var crlUrl string
+	if ekType == "vlek" {
+		crlUrl = fmt.Sprintf("http://localhost:%d/vlek/v1/Milan/crl", appConfig.KdsPort)
+	} else {
+		crlUrl = fmt.Sprintf("http://localhost:%d/vcek/v1/Milan/crl", appConfig.KdsPort)
+	}
+
 	template := &x509.Certificate{
 		SerialNumber:       big.NewInt(1),
 		SignatureAlgorithm: x509.SHA384WithRSAPSS,
@@ -188,8 +218,9 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 			Organization:       []string{"Advanced Micro Devices"},
 			CommonName:         "SEV-" + strings.ToUpper(ekType),
 		},
-		NotBefore: time.Now(),
-		NotAfter:  time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
+		CRLDistributionPoints: []string{crlUrl},
 	}
 
 	asn1Zero, _ := asn1.Marshal(0)
@@ -237,17 +268,17 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 	return cert, key
 }
 
-func generateCRL(askCert *x509.Certificate, askKey *rsa.PrivateKey) *x509.RevocationList {
+func generateCRL(arkCert *x509.Certificate, arkKey *rsa.PrivateKey) *x509.RevocationList {
 	crlTemplate := x509.RevocationList{
 		Number:             big.NewInt(4),
 		SignatureAlgorithm: x509.SHA384WithRSAPSS,
-		Issuer:             askCert.Issuer,
-		RawIssuer:          askCert.RawIssuer,
-		AuthorityKeyId:     askCert.AuthorityKeyId,
+		Issuer:             arkCert.Issuer,
+		RawIssuer:          arkCert.RawIssuer,
+		AuthorityKeyId:     arkCert.AuthorityKeyId,
 		NextUpdate:         time.Now().Add(1000 * 24 * time.Hour),
 	}
 
-	crlDER, err := x509.CreateRevocationList(rand.Reader, &crlTemplate, askCert, askKey)
+	crlDER, err := x509.CreateRevocationList(rand.Reader, &crlTemplate, arkCert, arkKey)
 	if err != nil {
 		return nil
 	}
@@ -294,13 +325,13 @@ func store(path, keyType string, bytes []byte) {
 
 func generateKeys(arkCert *x509.Certificate, arkKey *rsa.PrivateKey, ekType string) {
 	askCert, askKey := generateASK(arkCert, arkKey, ekType)
-	askCRL := generateCRL(askCert, askKey)
+	askCRL := generateCRL(arkCert, arkKey)
 
 	cert_chain := buildCertChain(arkCert, askCert)
 
 	ekCert, ekKey := generateChipKey(askCert, askKey, ekType)
 
-	valid := validateCRLSignature(askCRL, askCert)
+	valid := validateCRLSignature(askCRL, arkCert)
 	if !valid {
 		panic("Error generating CRL")
 	}
