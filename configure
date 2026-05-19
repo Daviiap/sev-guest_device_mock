@@ -16,15 +16,22 @@ sudo mkdir -p "$TARGET_DIR/vlek"
 echo "Created $TARGET_DIR directory"
 
 # Copy vcek files
-sudo cp "$KEYS_GEN_DIR/keys/vcek/ek.key" "$TARGET_DIR/vcek/private.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vcek/ek.pem" "$TARGET_DIR/vcek/public.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vcek/vcek.key" "$TARGET_DIR/vcek/private.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vcek/vcek.pem" "$TARGET_DIR/vcek/public.pem"
 sudo cp "$KEYS_GEN_DIR/keys/vcek/cert_chain.pem" "$TARGET_DIR/vcek/"
 sudo cp "$KEYS_GEN_DIR/keys/vcek/crl.der" "$TARGET_DIR/vcek/"
 echo "Copied vcek key, cert, and cert chain to $TARGET_DIR/vcek"
 
 # Copy vlek files
-sudo cp "$KEYS_GEN_DIR/keys/vlek/ek.key" "$TARGET_DIR/vlek/private.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vlek/ek.pem" "$TARGET_DIR/vlek/public.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vlek/vlek.key" "$TARGET_DIR/vlek/private.pem"
+sudo cp "$KEYS_GEN_DIR/keys/vlek/vlek.pem" "$TARGET_DIR/vlek/public.pem"
 sudo cp "$KEYS_GEN_DIR/keys/vlek/cert_chain.pem" "$TARGET_DIR/vlek/"
 sudo cp "$KEYS_GEN_DIR/keys/vlek/crl.der" "$TARGET_DIR/vlek/"
 echo "Copied vlek key, cert, and cert chain to $TARGET_DIR/vlek"
+
+# Copy report.bin if it exists in the current directory
+if [ -f "report.bin" ]; then
+    sudo cp "report.bin" "$TARGET_DIR/"
+    echo "Copied report.bin to $TARGET_DIR"
+fi
+

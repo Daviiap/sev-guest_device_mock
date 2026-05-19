@@ -1,4 +1,5 @@
 #include "report.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -12,6 +13,25 @@ void generate_random_array(uint8* array, int length) {
 }
 
 void get_report(struct attestation_report* report) {
+    FILE* fp = fopen("/etc/sev-guest/report.bin", "rb");
+    if (fp == NULL) {
+        fp = fopen("report.bin", "rb");
+    }
+
+    if (fp != NULL) {
+        size_t bytes_read = fread(report, 1, sizeof(struct attestation_report), fp);
+        fclose(fp);
+        if (bytes_read == sizeof(struct attestation_report)) {
+            printf("[info] Successfully loaded mock attestation report from report.bin\n");
+            return;
+        } else {
+            printf("[warn] Failed to read complete attestation report from report.bin (read %zu of %zu bytes). Falling back to defaults.\n",
+                   bytes_read, sizeof(struct attestation_report));
+        }
+    } else {
+        printf("[info] report.bin not found. Falling back to default mock report values.\n");
+    }
+
     uint8 measurement[] = {
         0x72, 0xD9, 0x9E, 0x55, 0x0E, 0x7C, 0xB1, 0x2A, 0xBA, 0xB9, 0xC9, 0x61,
         0xE4, 0x7F, 0x34, 0x3A, 0xCC, 0x8F, 0xF3, 0x0B, 0x6A, 0x62, 0xB4, 0x2B,

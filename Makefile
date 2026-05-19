@@ -7,8 +7,9 @@ TARGET = bin/sev-guest
 SRC_DIR = src
 OBJ_DIR = bin
 
-SOURCES = $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/crypto/*.c $(SRC_DIR)/fuse/*.c $(SRC_DIR)/snp/*.c)
+SOURCES = $(filter-out $(SRC_DIR)/imports.c, $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/crypto/*.c $(SRC_DIR)/fuse/*.c $(SRC_DIR)/snp/*.c))
 OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
+
 
 .PHONY: all clean
 

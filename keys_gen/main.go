@@ -127,6 +127,49 @@ func generateASK(caTemplate *x509.Certificate, caPrivateKey *rsa.PrivateKey, ekT
 	return cert, askPrivateKey
 }
 
+type ReportInfo struct {
+	BootLoader uint8
+	TEE        uint8
+	SNP        uint8
+	Microcode  uint8
+	ChipId     []byte
+}
+
+func getReportInfo() ReportInfo {
+	info := ReportInfo{
+		BootLoader: 0x03,
+		TEE:        0x00,
+		SNP:        0x08,
+		Microcode:  0x73,
+		ChipId:     make([]byte, 64),
+	}
+
+	data, err := os.ReadFile("report.bin")
+	if err != nil {
+		data, err = os.ReadFile("../report.bin")
+	}
+
+	if err == nil && len(data) >= 1184 {
+		// reported_tcb starts at offset 384
+		info.BootLoader = data[384]
+		info.TEE = data[385]
+		info.SNP = data[390]
+		info.Microcode = data[391]
+		
+		// chip_id is 64 bytes starting at offset 416
+		info.ChipId = make([]byte, 64)
+		copy(info.ChipId, data[416:480])
+		
+		fmt.Printf("Loaded values from report.bin: BootLoader=%d, TEE=%d, SNP=%d, Microcode=%d, ChipId=%x...\n",
+			info.BootLoader, info.TEE, info.SNP, info.Microcode, info.ChipId[:8])
+	} else {
+		fmt.Printf("Using default values: BootLoader=%d, TEE=%d, SNP=%d, Microcode=%d\n",
+			info.BootLoader, info.TEE, info.SNP, info.Microcode)
+	}
+
+	return info
+}
+
 func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, ekType string) (*x509.Certificate, *ecdsa.PrivateKey) {
 	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
@@ -152,25 +195,32 @@ func generateChipKey(askCert *x509.Certificate, askPrivateKey *rsa.PrivateKey, e
 	asn1Zero, _ := asn1.Marshal(0)
 	productNameAsn1, _ := asn1.MarshalWithParams("Milan", "ia5")
 
+	info := getReportInfo()
+	bootLoaderAsn1, _ := asn1.Marshal(int(info.BootLoader))
+	teeAsn1, _ := asn1.Marshal(int(info.TEE))
+	snpAsn1, _ := asn1.Marshal(int(info.SNP))
+	microcodeAsn1, _ := asn1.Marshal(int(info.Microcode))
+
 	template.ExtraExtensions = []pkix.Extension{
 		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 1}), Value: asn1Zero},
 		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 2}), Value: productNameAsn1},
-		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 1}), Value: asn1Zero},
-		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 2}), Value: asn1Zero},
-		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 3}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 1}), Value: bootLoaderAsn1},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 2}), Value: teeAsn1},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 3}), Value: snpAsn1},
 		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 4}), Value: asn1Zero},
 		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 5}), Value: asn1Zero},
 		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 6}), Value: asn1Zero},
 		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 7}), Value: asn1Zero},
-		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 8}), Value: asn1Zero},
+		{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 3, 8}), Value: microcodeAsn1},
 	}
 	if ekType == "vlek" {
 		cspidAsn1, _ := asn1.MarshalWithParams("go-sev-guest", "ia5")
 		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 5}), Value: cspidAsn1})
 	} else {
-		hwidAsn1, _ := asn1.Marshal(make([]byte, 64))
+		hwidAsn1, _ := asn1.Marshal(info.ChipId)
 		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{Id: asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 3704, 1, 4}), Value: hwidAsn1})
 	}
+
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, askCert, key.Public(), askPrivateKey)
 	if err != nil {
@@ -278,9 +328,9 @@ func generateKeys(arkCert *x509.Certificate, arkKey *rsa.PrivateKey, ekType stri
 
 	os.WriteFile("./keys/"+ekType+"/cert_chain.pem", chainPEM, 0644)
 
-	store("./keys/"+ekType+"/ek.pem", "CERTIFICATE", ekCert.Raw)
+	store("./keys/"+ekType+"/"+ekType+".pem", "CERTIFICATE", ekCert.Raw)
 	ekKeyBytes, _ := x509.MarshalECPrivateKey(ekKey)
-	store("./keys/"+ekType+"/ek.key", "EC PRIVATE KEY", ekKeyBytes)
+	store("./keys/"+ekType+"/"+ekType+".key", "EC PRIVATE KEY", ekKeyBytes)
 }
 
 func main() {

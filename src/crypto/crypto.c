@@ -138,14 +138,21 @@ int sign_attestation_report(struct attestation_report* report, __u32 key_sel) {
         memset(report->signature.r, 0, 72);
         memset(report->signature.s, 0, 72);
 
-        int r_len = BN_num_bytes(r);
-        int s_len = BN_num_bytes(s);
+        unsigned char temp_r[72];
+        unsigned char temp_s[72];
+
+        int r_len = BN_bn2bin(r, temp_r);
+        int s_len = BN_bn2bin(s, temp_s);
 
         if (r_len <= 72) {
-            BN_bn2bin(r, report->signature.r + (72 - r_len));
+            for (int i = 0; i < r_len; i++) {
+                report->signature.r[i] = temp_r[r_len - 1 - i];
+            }
         }
         if (s_len <= 72) {
-            BN_bn2bin(s, report->signature.s + (72 - s_len));
+            for (int i = 0; i < s_len; i++) {
+                report->signature.s[i] = temp_s[s_len - 1 - i];
+            }
         }
         ECDSA_SIG_free(ecdsa_sig);
     } else {
