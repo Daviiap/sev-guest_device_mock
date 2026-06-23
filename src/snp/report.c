@@ -1,10 +1,19 @@
 #include "report.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-void generate_random_array(uint8* array, int length) {
+bool has_custom_measurement = false;
+uint8_t custom_measurement[48];
+
+void override_measurement(const uint8_t* new_measurement) {
+    memcpy(custom_measurement, new_measurement, 48);
+    has_custom_measurement = true;
+}
+
+void generate_random_array(uint8_t* array, int length) {
     srand(time(NULL));
     int i;
     for (i = 0; i < length; i++) {
@@ -30,6 +39,10 @@ void get_report(struct attestation_report* report) {
         fprintf(stderr, "Error: Failed to read complete attestation report from report.bin (read %zu of %zu bytes)\n",
                 bytes_read, sizeof(struct attestation_report));
         exit(1);
+    }
+
+    if (has_custom_measurement) {
+        memcpy(report->measurement, custom_measurement, 48);
     }
 
     printf("[info] Successfully loaded mock attestation report from report.bin\n");

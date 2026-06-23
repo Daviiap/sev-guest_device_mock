@@ -4,5 +4,6 @@
 int device_is_running();
 int init_device();
 void stop_device();
+void override_measurement(const unsigned char* new_measurement);
 
 #endif

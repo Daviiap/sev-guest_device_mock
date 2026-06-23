@@ -49,6 +49,13 @@ func (*device) IsRunning() bool {
 	return C.device_is_running() == 1
 }
 
+func (d *device) SetMeasurement(measurement []byte) {
+	if len(measurement) != 48 {
+		panic("measurement must be exactly 48 bytes")
+	}
+	C.override_measurement((*C.uchar)(&measurement[0]))
+}
+
 func New() *device {
 	return &device{}
 }

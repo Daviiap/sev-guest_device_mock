@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +15,10 @@ type Config struct {
 	KdsPort int `json:"kds_port"`
 }
 
+type ReportConfig struct {
+	Measurement string `json:"measurement"`
+}
+
 func main() {
 	var appConfig Config
 	appConfig.KdsPort = 8080 // default
@@ -22,6 +27,24 @@ func main() {
 	}
 
 	device_mock := sevguest.New()
+
+	if data, err := os.ReadFile("report.json"); err == nil {
+		var reportCfg ReportConfig
+		if err := json.Unmarshal(data, &reportCfg); err == nil {
+			if reportCfg.Measurement != "" {
+				measurementBytes, err := hex.DecodeString(reportCfg.Measurement)
+				if err != nil {
+					fmt.Printf("Error decoding measurement hex from report.json: %v\n", err)
+				} else if len(measurementBytes) != 48 {
+					fmt.Printf("Error: measurement in report.json must be 48 bytes (96 hex chars)\n")
+				} else {
+					device_mock.SetMeasurement(measurementBytes)
+					fmt.Printf("Successfully loaded custom measurement from report.json\n")
+				}
+			}
+		}
+	}
+
 	device_mock.Start()
 	defer device_mock.Stop()
 
