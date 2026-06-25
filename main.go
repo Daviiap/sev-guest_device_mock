@@ -16,7 +16,8 @@ type Config struct {
 }
 
 type ReportConfig struct {
-	Measurement string `json:"measurement"`
+	Measurement string  `json:"measurement"`
+	Policy      *uint64 `json:"policy"`
 }
 
 func main() {
@@ -41,6 +42,10 @@ func main() {
 					device_mock.SetMeasurement(measurementBytes)
 					fmt.Printf("Successfully loaded custom measurement from report.json\n")
 				}
+			}
+			if reportCfg.Policy != nil {
+				device_mock.SetPolicy(*reportCfg.Policy)
+				fmt.Printf("Successfully loaded custom policy from report.json\n")
 			}
 		}
 	}

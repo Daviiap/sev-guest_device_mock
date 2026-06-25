@@ -6,5 +6,6 @@
 
 void get_report(struct attestation_report* report);
 void generate_random_array(uint8* array, int length);
+void override_policy(uint64 new_policy);
 
 #endif

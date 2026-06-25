@@ -8,9 +8,17 @@
 bool has_custom_measurement = false;
 uint8_t custom_measurement[48];
 
+bool has_custom_policy = false;
+uint64 custom_policy;
+
 void override_measurement(const uint8_t* new_measurement) {
     memcpy(custom_measurement, new_measurement, 48);
     has_custom_measurement = true;
+}
+
+void override_policy(uint64 new_policy) {
+    custom_policy = new_policy;
+    has_custom_policy = true;
 }
 
 void generate_random_array(uint8_t* array, int length) {
@@ -43,6 +51,10 @@ void get_report(struct attestation_report* report) {
 
     if (has_custom_measurement) {
         memcpy(report->measurement, custom_measurement, 48);
+    }
+
+    if (has_custom_policy) {
+        report->policy = custom_policy;
     }
 
     printf("[info] Successfully loaded mock attestation report from report.bin\n");

@@ -56,6 +56,10 @@ func (d *device) SetMeasurement(measurement []byte) {
 	C.override_measurement((*C.uchar)(&measurement[0]))
 }
 
+func (d *device) SetPolicy(policy uint64) {
+	C.override_policy(C.ulong(policy))
+}
+
 func New() *device {
 	return &device{}
 }
