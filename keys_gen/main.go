@@ -167,9 +167,12 @@ func getReportInfo() ReportInfo {
 		ChipId:     make([]byte, 64),
 	}
 
-	data, err := os.ReadFile("report.bin")
+	data, err := os.ReadFile("/etc/sev-guest/report.bin")
 	if err != nil {
-		data, err = os.ReadFile("../report.bin")
+		data, err = os.ReadFile("report.bin")
+		if err != nil {
+			data, err = os.ReadFile("../report.bin")
+		}
 	}
 
 	if err == nil && len(data) >= 1184 {

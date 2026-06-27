@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,6 +22,9 @@ type ReportConfig struct {
 }
 
 func main() {
+	reportPath := flag.String("report", "report.json", "Path to the report configuration JSON file")
+	flag.Parse()
+
 	var appConfig Config
 	appConfig.KdsPort = 8080 // default
 	if data, err := os.ReadFile("config.json"); err == nil {
@@ -29,7 +33,7 @@ func main() {
 
 	device_mock := sevguest.New()
 
-	if data, err := os.ReadFile("report.json"); err == nil {
+	if data, err := os.ReadFile(*reportPath); err == nil {
 		var reportCfg ReportConfig
 		if err := json.Unmarshal(data, &reportCfg); err == nil {
 			if reportCfg.Measurement != "" {
