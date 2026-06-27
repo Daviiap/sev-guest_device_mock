@@ -13,7 +13,8 @@ import (
 )
 
 type Config struct {
-	KdsPort int `json:"kds_port"`
+	KdsPort    int    `json:"kds_port"`
+	ReportPath string `json:"custom_report_path"`
 }
 
 type ReportConfig struct {
@@ -22,18 +23,19 @@ type ReportConfig struct {
 }
 
 func main() {
-	reportPath := flag.String("report", "report.json", "Path to the report configuration JSON file")
+	configPath := flag.String("config", "config.json", "Path to the configuration JSON file")
 	flag.Parse()
 
 	var appConfig Config
-	appConfig.KdsPort = 8080 // default
-	if data, err := os.ReadFile("config.json"); err == nil {
+	appConfig.KdsPort = 8080             // default
+	appConfig.ReportPath = "report.json" // default
+	if data, err := os.ReadFile(*configPath); err == nil {
 		json.Unmarshal(data, &appConfig)
 	}
 
 	device_mock := sevguest.New()
 
-	if data, err := os.ReadFile(*reportPath); err == nil {
+	if data, err := os.ReadFile(appConfig.ReportPath); err == nil {
 		var reportCfg ReportConfig
 		if err := json.Unmarshal(data, &reportCfg); err == nil {
 			if reportCfg.Measurement != "" {

@@ -1,3 +1,4 @@
 {
-  "kds_port": 3500
+  "kds_port": 3500,
+  "custom_report_path": "report.json"
 }
