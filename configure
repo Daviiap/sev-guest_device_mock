@@ -1,37 +1,34 @@
 #!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
 
 sudo apt install -y build-essential libfuse-dev libssl-dev pkg-config uuid-dev
 
 KEYS_GEN_DIR="keys_gen"
+KEYS_DIR="$KEYS_GEN_DIR/keys"
 TARGET_DIR="/etc/sev-guest"
 
-# Build keys
-pushd "$KEYS_GEN_DIR"
-go run main.go
-popd
-
 # Create target directories
-sudo mkdir -p "$TARGET_DIR/vcek"
-sudo mkdir -p "$TARGET_DIR/vlek"
+sudo mkdir -p "$TARGET_DIR/vcek" "$TARGET_DIR/vlek"
 echo "Created $TARGET_DIR directory"
 
-# Copy vcek files
-sudo cp "$KEYS_GEN_DIR/keys/vcek/vcek.key" "$TARGET_DIR/vcek/private.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vcek/vcek.pem" "$TARGET_DIR/vcek/public.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vcek/cert_chain.pem" "$TARGET_DIR/vcek/"
-sudo cp "$KEYS_GEN_DIR/keys/vcek/crl.der" "$TARGET_DIR/vcek/"
-echo "Copied vcek key, cert, and cert chain to $TARGET_DIR/vcek"
-
-# Copy vlek files
-sudo cp "$KEYS_GEN_DIR/keys/vlek/vlek.key" "$TARGET_DIR/vlek/private.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vlek/vlek.pem" "$TARGET_DIR/vlek/public.pem"
-sudo cp "$KEYS_GEN_DIR/keys/vlek/cert_chain.pem" "$TARGET_DIR/vlek/"
-sudo cp "$KEYS_GEN_DIR/keys/vlek/crl.der" "$TARGET_DIR/vlek/"
-echo "Copied vlek key, cert, and cert chain to $TARGET_DIR/vlek"
-
-# Copy report.bin if it exists in the current directory
+# Install report.bin first: the device mock and keys_gen both look for it
+# in $TARGET_DIR before the current directory, so the certificates must be
+# generated from the same file the device will serve.
 if [ -f "report.bin" ]; then
     sudo cp "report.bin" "$TARGET_DIR/"
     echo "Copied report.bin to $TARGET_DIR"
 fi
 
+# Build keys
+(cd "$KEYS_GEN_DIR" && go run . -config ../config.json)
+
+# Install the keys and certificates of each endorsement key
+for ek in vcek vlek; do
+    sudo install -m 600 "$KEYS_DIR/$ek/$ek.key" "$TARGET_DIR/$ek/private.pem"
+    sudo install -m 644 "$KEYS_DIR/$ek/$ek.pem" "$TARGET_DIR/$ek/public.pem"
+    sudo install -m 644 "$KEYS_DIR/$ek/cert_chain.pem" "$TARGET_DIR/$ek/"
+    sudo install -m 644 "$KEYS_DIR/$ek/crl.der" "$TARGET_DIR/$ek/"
+    echo "Copied $ek key, cert, cert chain and CRL to $TARGET_DIR/$ek"
+done

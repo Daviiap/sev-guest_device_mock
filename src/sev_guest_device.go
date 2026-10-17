@@ -3,7 +3,7 @@
 package sevguest
 
 //#cgo CFLAGS: -D_FILE_OFFSET_BITS=64
-//#cgo LDFLAGS: -luuid -lssl -lcrypto -Wl,--allow-multiple-definition
+//#cgo LDFLAGS: -luuid -lssl -lcrypto -lpthread
 //#cgo pkg-config: fuse
 //#include <stdio.h>
 //#include <stdlib.h>
@@ -15,34 +15,66 @@ import (
 	"time"
 )
 
-type device struct{}
+const (
+	startTimeout = 5 * time.Second
+	stopTimeout  = 5 * time.Second
+	pollInterval = 10 * time.Millisecond
+)
 
+type device struct {
+	// done is closed when the CUSE session loop returns.
+	done chan struct{}
+}
+
+// Start creates /dev/sev-guest and returns once it is ready. It panics if the
+// device cannot be started.
 func (d *device) Start() {
-	errCh := make(chan int, 1)
+	if d.IsRunning() {
+		return
+	}
+
+	done := make(chan struct{})
+	var res int
 	go func() {
-		errCh <- int(C.init_device())
+		res = int(C.init_device())
+		close(done)
 	}()
-	timeout := time.After(5 * time.Second)
+	d.done = done
+
+	timeout := time.After(startTimeout)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
 	for !d.IsRunning() {
 		select {
-		case err := <-errCh:
-			if err != 0 {
+		case <-done:
+			if res != 0 {
 				panic("failed to initialize sev-guest device mock")
 			}
-			return
+			panic("sev-guest device mock exited during startup")
 		case <-timeout:
 			panic("timeout waiting for sev-guest device to become ready")
-		default:
-			time.Sleep(10 * time.Millisecond)
+		case <-ticker.C:
 		}
 	}
 }
 
+// Stop removes the device and waits for the session to end.
 func (d *device) Stop() {
-	C.stop_device()
-	for d.IsRunning() {
-		time.Sleep(10 * time.Millisecond)
+	if d.done == nil {
+		return
 	}
+	C.stop_device()
+	select {
+	case <-d.done:
+	case <-time.After(stopTimeout):
+	}
+	d.done = nil
+}
+
+// Done returns a channel that is closed when the device stops. It is nil if
+// the device was never started.
+func (d *device) Done() <-chan struct{} {
+	return d.done
 }
 
 func (*device) IsRunning() bool {

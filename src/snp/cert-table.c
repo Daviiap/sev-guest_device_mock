@@ -189,37 +189,6 @@ out:
     return rc;
 }
 
-int cert_table_get_entry(const struct cert_table *table,
-                         struct cert_table_entry *entry, const char *guid) {
-    int rc = EXIT_FAILURE;
-    uuid_t id = {0};
-
-    if (!table || !entry || !guid) {
-        rc = EINVAL;
-        goto out;
-    }
-
-    rc = uuid_parse(guid, id);
-    if (rc != 0) {
-        rc = EINVAL;
-        goto out;
-    }
-
-    /* Return ENOENT if the GUID is not found in the table */
-    rc = ENOENT;
-    for (size_t i = 0; !entry_is_terminator(table->entry + i); i++) {
-        struct cert_table_entry *current = table->entry + i;
-
-        if (memcmp(current->guid, id, sizeof(id)) == 0) {
-            *entry = *current;
-            rc = EXIT_SUCCESS;
-            break;
-        }
-    }
-out:
-    return rc;
-}
-
 int cert_table_append_cert(const struct cert_table *table, uint8_t *buffer,
                            size_t buffer_size, const char *guid, uint8_t *cert,
                            size_t cert_size) {

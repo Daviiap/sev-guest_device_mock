@@ -5,10 +5,10 @@
 #include "../snp/attestation.h"
 #include "../snp/sev-guest.h"
 
-void handle_snp_get_report(fuse_req_t req, int cmd, void *arg,
+void handle_snp_get_report(fuse_req_t req, void *arg,
                            const void *in_buf, size_t in_bufsz);
 
-void handle_snp_get_ext_report(fuse_req_t req, int cmd, void *arg,
+void handle_snp_get_ext_report(fuse_req_t req, void *arg,
                                const void *in_buf, size_t in_bufsz);
 
 #endif

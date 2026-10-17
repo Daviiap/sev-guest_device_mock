@@ -1,2 +1,5 @@
 bin
 .vscode
+
+# Integration test binary
+test/device.test

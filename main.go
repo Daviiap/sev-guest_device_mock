@@ -1,20 +1,34 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
+	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	sevguest "github.com/Daviiap/sev-guest_device_mock/src"
 )
 
+const (
+	defaultConfigPath = "config.json"
+	defaultReportPath = "report.json"
+	defaultKdsPort    = 8080
+)
+
 type Config struct {
-	KdsPort    int    `json:"kds_port"`
+	KdsPort int `json:"kds_port"`
+	// ReportPath and KeysDir are resolved relative to the config file.
 	ReportPath string `json:"custom_report_path"`
+	KeysDir    string `json:"keys_dir"`
 }
 
 type ReportConfig struct {
@@ -22,67 +36,121 @@ type ReportConfig struct {
 	Policy      *uint64 `json:"policy"`
 }
 
+// loadConfig reads the config file. A missing file is only an error when its
+// path was given explicitly.
+func loadConfig(path string, explicit bool) (Config, string, error) {
+	cfg := Config{KdsPort: defaultKdsPort, KeysDir: sevguest.DefaultKeysDir}
+	baseDir := filepath.Dir(path)
+
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) && !explicit {
+		return cfg, baseDir, nil
+	}
+	if err != nil {
+		return cfg, baseDir, fmt.Errorf("reading config: %w", err)
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, baseDir, fmt.Errorf("parsing config %s: %w", path, err)
+	}
+	return cfg, baseDir, nil
+}
+
+func resolvePath(baseDir, path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(baseDir, path)
+}
+
+type reportOverrider interface {
+	SetMeasurement([]byte)
+	SetPolicy(uint64)
+}
+
+// applyReportConfig applies the overrides from the report config file. A
+// missing file is only an error when its path was configured explicitly.
+func applyReportConfig(device reportOverrider, path string, explicit bool) error {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) && !explicit {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reading report config: %w", err)
+	}
+
+	var reportCfg ReportConfig
+	if err := json.Unmarshal(data, &reportCfg); err != nil {
+		return fmt.Errorf("parsing report config %s: %w", path, err)
+	}
+
+	if reportCfg.Measurement != "" {
+		measurement, err := hex.DecodeString(reportCfg.Measurement)
+		if err != nil {
+			return fmt.Errorf("decoding measurement hex from %s: %w", path, err)
+		}
+		if len(measurement) != 48 {
+			return fmt.Errorf("measurement in %s must be 48 bytes (96 hex chars), got %d bytes", path, len(measurement))
+		}
+		device.SetMeasurement(measurement)
+		log.Printf("Loaded custom measurement from %s", path)
+	}
+	if reportCfg.Policy != nil {
+		device.SetPolicy(*reportCfg.Policy)
+		log.Printf("Loaded custom policy from %s", path)
+	}
+	return nil
+}
+
 func main() {
-	configPath := flag.String("config", "config.json", "Path to the configuration JSON file")
+	configPath := flag.String("config", defaultConfigPath, "Path to the configuration JSON file")
 	flag.Parse()
 
-	var appConfig Config
-	appConfig.KdsPort = 8080             // default
-	appConfig.ReportPath = "report.json" // default
-	if data, err := os.ReadFile(*configPath); err == nil {
-		json.Unmarshal(data, &appConfig)
-	}
-
-	device_mock := sevguest.New()
-
-	if data, err := os.ReadFile(appConfig.ReportPath); err == nil {
-		var reportCfg ReportConfig
-		if err := json.Unmarshal(data, &reportCfg); err == nil {
-			if reportCfg.Measurement != "" {
-				measurementBytes, err := hex.DecodeString(reportCfg.Measurement)
-				if err != nil {
-					fmt.Printf("Error decoding measurement hex from report.json: %v\n", err)
-				} else if len(measurementBytes) != 48 {
-					fmt.Printf("Error: measurement in report.json must be 48 bytes (96 hex chars)\n")
-				} else {
-					device_mock.SetMeasurement(measurementBytes)
-					fmt.Printf("Successfully loaded custom measurement from report.json\n")
-				}
-			}
-			if reportCfg.Policy != nil {
-				device_mock.SetPolicy(*reportCfg.Policy)
-				fmt.Printf("Successfully loaded custom policy from report.json\n")
-			}
+	configExplicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "config" {
+			configExplicit = true
 		}
+	})
+
+	appConfig, baseDir, err := loadConfig(*configPath, configExplicit)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	device_mock.Start()
-	defer device_mock.Stop()
+	reportPath := resolvePath(baseDir, defaultReportPath)
+	if appConfig.ReportPath != "" {
+		reportPath = resolvePath(baseDir, appConfig.ReportPath)
+	}
+	keysDir := resolvePath(baseDir, appConfig.KeysDir)
 
-	// VCEK routes
-	http.HandleFunc("/vcek/v1/Milan/cert_chain", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join("keys_gen", "keys", "vcek", "cert_chain.pem"))
-	})
-	http.HandleFunc("/vcek/v1/Milan/crl", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join("keys_gen", "keys", "vcek", "crl.der"))
-	})
+	deviceMock := sevguest.New()
+	if err := applyReportConfig(deviceMock, reportPath, appConfig.ReportPath != ""); err != nil {
+		log.Fatal(err)
+	}
 
-	// VLEK routes
-	http.HandleFunc("/vlek/v1/Milan/cert_chain", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join("keys_gen", "keys", "vlek", "cert_chain.pem"))
-	})
-	http.HandleFunc("/vlek/v1/Milan/crl", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join("keys_gen", "keys", "vlek", "crl.der"))
-	})
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
+	deviceMock.Start()
+	defer deviceMock.Stop()
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", appConfig.KdsPort),
+		Handler: sevguest.KDSHandler(keysDir),
+	}
+	serverErr := make(chan error, 1)
 	go func() {
-		addr := fmt.Sprintf(":%d", appConfig.KdsPort)
-		fmt.Printf("Starting mock KDS HTTP server on %s\n", addr)
-		if err := http.ListenAndServe(addr, nil); err != nil {
-			fmt.Printf("HTTP server failed: %v\n", err)
-		}
+		log.Printf("Starting mock KDS HTTP server on %s (serving %s)", server.Addr, keysDir)
+		serverErr <- server.ListenAndServe()
 	}()
 
-	for device_mock.IsRunning() {
+	select {
+	case <-ctx.Done():
+		log.Print("Shutting down")
+	case <-deviceMock.Done():
+		log.Print("sev-guest device stopped unexpectedly")
+	case err := <-serverErr:
+		log.Printf("HTTP server failed: %v", err)
 	}
+	server.Close()
 }

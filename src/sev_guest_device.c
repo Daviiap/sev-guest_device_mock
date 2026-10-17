@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <fuse/cuse_lowlevel.h>
 #include <fuse/fuse_opt.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +16,8 @@
 #include "snp/cert-table.h"
 #include "snp/report.h"
 #include "snp/sev-guest.h"
+
+#define DEVICE_PATH "/dev/sev-guest"
 
 static const char *usage =
     "usage: sev-guest [options]\n"
@@ -31,7 +34,12 @@ static const char *usage =
 #define SEV_GUEST_OPT(t, p) \
     { t, offsetof(struct sev_guest_param, p), 1 }
 
-static struct attestation_report report;
+/*
+ * The session is created and torn down by the thread running init_device()
+ * while device_is_running() and stop_device() are called from others, so
+ * every access to it goes through se_lock.
+ */
+static pthread_mutex_t se_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct fuse_session *se = NULL;
 
 static void sev_guest_open(fuse_req_t req, struct fuse_file_info *fi) {
@@ -57,7 +65,6 @@ static int sev_guest_process_arg(void *data, const char *arg, int key,
                                  struct fuse_args *outargs) {
     struct sev_guest_param *param = data;
 
-    (void)outargs;
     (void)arg;
 
     switch (key) {
@@ -84,11 +91,11 @@ void sev_guest_ioctl(fuse_req_t req, int cmd, void *arg,
     switch (cmd) {
         case SNP_GET_REPORT:
             printf("[debug] IOCTL received: SNP_GET_REPORT (in_bufsz=%zu)\n", in_bufsz);
-            handle_snp_get_report(req, cmd, arg, in_buf, in_bufsz);
+            handle_snp_get_report(req, arg, in_buf, in_bufsz);
             break;
         case SNP_GET_EXT_REPORT:
             printf("[debug] IOCTL received: SNP_GET_EXT_REPORT (in_bufsz=%zu)\n", in_bufsz);
-            handle_snp_get_ext_report(req, cmd, arg, in_buf, in_bufsz);
+            handle_snp_get_ext_report(req, arg, in_buf, in_bufsz);
             break;
         default:
             printf("[debug] IOCTL received: UNKNOWN cmd=0x%x\n", cmd);
@@ -103,94 +110,96 @@ static const struct cuse_lowlevel_ops sev_guest_clops = {
 };
 
 int device_is_running() {
-    return se != NULL && access("/dev/sev-guest", F_OK) == 0 && !fuse_session_exited(se);
+    pthread_mutex_lock(&se_lock);
+    int running = se != NULL && !fuse_session_exited(se) &&
+                  access(DEVICE_PATH, F_OK) == 0;
+    pthread_mutex_unlock(&se_lock);
+    return running;
 }
 
 int init_device() {
-    if (!device_is_running()) {
-        int argc = 2;
-        char *argv[] = {"sev-guest", "-f"};
-        struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-        struct sev_guest_param param = {0, 0, 0};
-        char dev_name[18] = "DEVNAME=sev-guest";
-        const char *dev_info_argv[] = {dev_name};
-        struct cuse_info dev_info;
-        int ret = 1;
+    int argc = 2;
+    char *argv[] = {"sev-guest", "-f"};
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    struct sev_guest_param param = {0, 0, 0};
+    char dev_name[] = "DEVNAME=sev-guest";
+    const char *dev_info_argv[] = {dev_name};
+    struct cuse_info dev_info;
+    struct attestation_report report;
 
-        if (fuse_opt_parse(&args, &param, sev_guest_opts,
-                           sev_guest_process_arg)) {
-            printf("failed to parse option\n");
-            fuse_opt_free_args(&args);
-            return ret;
-        }
+    /* The Go runtime exits without flushing stdio, so avoid block buffering. */
+    setvbuf(stdout, NULL, _IOLBF, 0);
 
-        get_report(&report);
-
-        memset(&dev_info, 0x00, sizeof(dev_info));
-        dev_info.dev_major = param.major;
-        dev_info.dev_minor = param.minor;
-        dev_info.dev_info_argc = 1;
-        dev_info.dev_info_argv = dev_info_argv;
-        dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
-
-        int multithreaded;
-        int res;
-
-        printf("[info] initializing sev-guest device mock...\n");
-        se = cuse_lowlevel_setup(argc, argv, &dev_info, &sev_guest_clops,
-                                 &multithreaded, NULL);
-        if (se == NULL) {
-            printf("[error] cuse_lowlevel_setup failed\n");
-            return 1;
-        }
-
-        printf("[info] sev-guest device mock running (multithreaded=%d)\n", multithreaded);
-
-        if (multithreaded) {
-            res = fuse_session_loop_mt(se);
-        } else {
-            res = fuse_session_loop(se);
-        }
-        if (res == -1) {
-            return 1;
-        }
-        cuse_lowlevel_teardown(se);
-        se = NULL;
+    pthread_mutex_lock(&se_lock);
+    int busy = se != NULL;
+    pthread_mutex_unlock(&se_lock);
+    if (busy) {
+        fprintf(stderr, "[error] sev-guest device mock is already running\n");
+        return 1;
     }
-    return 0;
+
+    if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
+        fprintf(stderr, "[error] failed to parse options\n");
+        fuse_opt_free_args(&args);
+        return 1;
+    }
+    fuse_opt_free_args(&args);
+
+    /* Fail early instead of on the first request if report.bin is unusable. */
+    if (get_report(&report) != 0) {
+        return 1;
+    }
+
+    memset(&dev_info, 0x00, sizeof(dev_info));
+    dev_info.dev_major = param.major;
+    dev_info.dev_minor = param.minor;
+    dev_info.dev_info_argc = 1;
+    dev_info.dev_info_argv = dev_info_argv;
+    dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
+
+    int multithreaded;
+
+    printf("[info] initializing sev-guest device mock...\n");
+    struct fuse_session *session = cuse_lowlevel_setup(argc, argv, &dev_info, &sev_guest_clops,
+                                                       &multithreaded, NULL);
+    if (session == NULL) {
+        fprintf(stderr, "[error] cuse_lowlevel_setup failed\n");
+        return 1;
+    }
+
+    pthread_mutex_lock(&se_lock);
+    se = session;
+    pthread_mutex_unlock(&se_lock);
+
+    printf("[info] sev-guest device mock running (multithreaded=%d)\n", multithreaded);
+
+    int res = multithreaded ? fuse_session_loop_mt(session) : fuse_session_loop(session);
+
+    pthread_mutex_lock(&se_lock);
+    se = NULL;
+    pthread_mutex_unlock(&se_lock);
+
+    cuse_lowlevel_teardown(session);
+    printf("[info] sev-guest device mock stopped\n");
+
+    return res == -1 ? 1 : 0;
 }
 
 void stop_device() {
-    if (device_is_running()) {
+    pthread_mutex_lock(&se_lock);
+    int was_running = se != NULL && !fuse_session_exited(se);
+    if (was_running) {
         printf("[info] stopping sev-guest device mock...\n");
         fuse_session_exit(se);
     }
+    pthread_mutex_unlock(&se_lock);
+
+    /*
+     * fuse_session_exit() only sets a flag: the loop notices it after its
+     * next request. Opening the device generates one so the loop returns.
+     */
+    if (was_running) {
+        int fd = open(DEVICE_PATH, O_RDONLY);
+        if (fd >= 0) close(fd);
+    }
 }
-
-// This code is commented to make the Go code the mais entrypoint for the mock
-// int main(int argc, char **argv) {
-//     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-//     struct sev_guest_param param = {0, 0, 0};
-//     char dev_name[18] = "DEVNAME=sev-guest";
-//     const char *dev_info_argv[] = {dev_name};
-//     struct cuse_info dev_info;
-//     int ret = 1;
-
-//     if (fuse_opt_parse(&args, &param, sev_guest_opts, sev_guest_process_arg)) {
-//         printf("failed to parse option\n");
-//         fuse_opt_free_args(&args);
-//         return ret;
-//     }
-
-//     get_report(&report);
-
-//     memset(&dev_info, 0x00, sizeof(dev_info));
-//     dev_info.dev_major = param.major;
-//     dev_info.dev_minor = param.minor;
-//     dev_info.dev_info_argc = 1;
-//     dev_info.dev_info_argv = dev_info_argv;
-//     dev_info.flags = CUSE_UNRESTRICTED_IOCTL;
-
-//     return cuse_lowlevel_main(args.argc, args.argv, &dev_info, &sev_guest_clops,
-//                               NULL);
-// }

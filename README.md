@@ -35,7 +35,47 @@ cd sev-guest_device_mock
 
 To run the configure script, you need to have root privileges. This script will install the dependencies and generate dummy VCEK and VLEK, along with the respective cert_chain for both keys. Once generated, the script will move these files to the `/etc/sev-guest` directory.
 
-To verify the signature of the report, you can use the ./keys_gen/keys/vcek.crt file. It contains the essential certificate required for signature validation. Furthermore, you can rely on the ./keys_gen/keys/cert_chain.pem file to verify the signature of the vcek.crt certificate. This chain file guarantees the authenticity and integrity of the certificate by including all the necessary intermediate certificates in the validation process, similar to an authentic AMD environment.
+The generated keys are written to `keys_gen/keys/` and installed in `/etc/sev-guest`:
+
+| File | Content |
+| --- | --- |
+| `/etc/sev-guest/report.bin` | Base attestation report (copied from the repository root) |
+| `/etc/sev-guest/{vcek,vlek}/private.pem` | Endorsement key used to sign the reports |
+| `/etc/sev-guest/{vcek,vlek}/public.pem` | VCEK/VLEK certificate |
+| `/etc/sev-guest/{vcek,vlek}/cert_chain.pem` | ASK (or ASVK) and ARK certificates, in the KDS `cert_chain` order |
+| `/etc/sev-guest/{vcek,vlek}/crl.der` | CRL signed by the ARK |
+
+The certificates follow the layout of the real AMD ones: the same distinguished names (UTF8String, in AMD's order), serial numbers, key usages and extensions. The VCEK/VLEK carries only the AMD extensions, with the raw chip ID in the HWID extension and the product name with the stepping (e.g. `Milan-B1`) taken from `report.bin`. The only intended differences are the CRL distribution points, which point to the mock KDS (`http://localhost:<kds_port>`), and the RSASSA-PSS parameters, which omit the default trailer field that AMD encodes explicitly.
+
+The certificates are generated from the TCB, CPUID and chip ID of `report.bin`, so run `./configure` again whenever `report.bin` changes. When a VLEK is installed, requests with the default `key_sel` are signed with the VLEK.
+
+`SNP_GET_EXT_REPORT` returns the certificates the way a host does: a GHCB certificate table followed by the DER-encoded VCEK/VLEK, ASK and ARK.
+
+## Running the standalone mock
+
+```bash
+make
+sudo ./bin/sev-guest -config config.json
+```
+
+`config.json` accepts:
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `kds_port` | `8080` | Port of the mock KDS HTTP server |
+| `custom_report_path` | `report.json` | File with report overrides |
+| `keys_dir` | `/etc/sev-guest` | Directory the mock KDS serves the certificates from |
+
+Relative paths are resolved against the directory of the config file. `report.json` overrides fields of `report.bin`:
+
+```json
+{
+    "measurement": "<96 hex chars>",
+    "policy": 196608
+}
+```
+
+The mock KDS (also available to Go code as `sevguest.KDSHandler`) serves `/vcek/v1/Milan/cert_chain`, `/vcek/v1/Milan/crl`, `/vcek/v1/Milan/{hwid}` (the VCEK in DER), `/vlek/v1/Milan/cert_chain` and `/vlek/v1/Milan/crl`.
 
 ## Usage
 To use the package on your Golang code, you must get it running:
@@ -75,10 +115,21 @@ func main() {
 
 ```
 
+## Tests
+
+The integration tests in `test/` drive the mock through [go-sev-guest](https://github.com/google/go-sev-guest), including its full attestation verification (certificate schema, chain, CRL and signature) against the mock KDS. They need root and the keys installed by `./configure`:
+
+```bash
+cd test
+go test -c -o device.test .
+sudo ./device.test -test.v
+```
+
 ## Ref
 
 [SEV Secure Nested Paging Firmware ABI Specification](https://www.amd.com/system/files/TechDocs/56860.pdf)
 
 ## Future work
 
-* Use a configuration file to define the report fields;
+* Allow overriding more report fields through `report.json`;
+* Support `SNP_GET_DERIVED_KEY`.
